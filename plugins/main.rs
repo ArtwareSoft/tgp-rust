@@ -1,5 +1,4 @@
-use core::{rt::{Ctx, RTValue, jb_run}, tgp::{COMPS, CompsTrait }};
-use std::rc::Rc;
+use core::{rt::{Ctx}, tgp::{COMPS, CompsTrait }};
 
 mod core;
 mod common;
@@ -8,9 +7,7 @@ mod common;
 fn main() {
     {
         if let Some(comp) = COMPS.get("pipeTest") {
-            let input = RTValue::StaticString("Line one\nLine two\nLine three");
-            let res = jb_run(Ctx::new().set_data(Rc::new(input)).set_profile(&comp.r#impl));
-            println!("{:#?}", res);
+            println!("{:#?}", Ctx::new().set_profile(&comp.r#impl).run_itself());
         } else {
             println!("Component not found");
         }

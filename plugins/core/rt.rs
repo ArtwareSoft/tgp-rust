@@ -49,9 +49,9 @@ impl Ctx {
         let param_id = parent_param.id;
         self.profile_and_path(&profile.props[param_id], parent_param, asStaticString(&format!("{}/{param_id}", self.path)))
     }
-    pub fn inner_profile_in_array(&self, profile: &'static Profile, parent_param: &'static Param, index: usize) -> Self {
+    pub fn inner_profile_in_array(&self, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Self {
         let param_id = parent_param.id;
-        self.profile_and_path(&profile.props[param_id], parent_param, asStaticString(&format!("{}/{param_id}/{index}", self.path)))
+        self.profile_and_path(inner_profile, parent_param, asStaticString(&format!("{}/{param_id}/{index}", self.path)))
     }
     pub fn new_comp(&self, params: HashMap<StaticString, RTValue>, comp: &'static Comp) -> Self {
         let pt = comp.id;
@@ -157,9 +157,9 @@ pub fn jb_run(ctx: Ctx) -> RTValue {
             let params: HashMap<StaticString, RTValue> = comp.params.iter().map(|parent_param| {
                 let param_id = parent_param.id;
                 match &profile.props[param_id] {
-                    TgpValue::Array(inner_array) => (param_id, RTValue::DynamicScripts(inner_array.iter().enumerate().map(|(i,_)| {
-                            new_ctx.inner_profile_in_array(profile, parent_param, i)
-                       }).collect())),
+                    TgpValue::Array(inner_array) => (param_id, RTValue::DynamicScripts(inner_array.iter().enumerate()
+                      .map(|(i,inner_profile)| 
+                          new_ctx.inner_profile_in_array(inner_profile, parent_param, i)).collect())),
                     _ => (param_id, RTValue::DynamicScript(new_ctx.inner_profile(profile, parent_param)))
                 }
             }).collect();

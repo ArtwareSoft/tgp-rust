@@ -148,7 +148,7 @@ pub enum TgpValue {
     Profile(Profile, Option<&'static ExtendCtx>),
     ConstsOnlyProfile(ConstsOnlyProfile),
     RustImpl(Arc<dyn RustImpl>),
-    Array(Vec<&'static TgpValue>),
+    Array(Vec<TgpValue>),
     Nop()
 }
 

@@ -31,7 +31,6 @@ impl IntoIterator for RTValue {
         }
     }
 }
-
 pub enum RTIter {
     Empty,
     StaticString(Option<StaticString>),
@@ -60,7 +59,7 @@ impl Iterator for RTIter {
             RTIter::IntArray(iter) => iter.next().map(RTValue::I32),
             RTIter::StaticStringArray(iter) => iter.next().map(|x| RTValue::StaticString(x)),
             RTIter::Array(iter) => iter.next(),
-            RTIter::DynamicScripts(iter) => iter.next().map(|x| RTValue::DynamicScript(x)),
+            RTIter::DynamicScripts(iter) => iter.next().map(|x| RTValue::DynamicScript(x) ),
             RTIter::Error(opt) => opt.take().map(RTValue::Error),
             RTIter::DynamicScript(opt) => opt.take().map(RTValue::DynamicScript),
             RTIter::Obj(opt) => opt.take().map(RTValue::Obj),
@@ -73,19 +72,41 @@ impl RustImpl for Pipe {
     fn run(&self, ctx: &Ctx) -> RTValue {
         let source = ctx.calc_dynamic_param("source", None, None);
         match source {
-            Some(val) => ctx.get_param("operator").into_iter().fold(val, |agg, dynamic_script| 
-                step(match dynamic_script { RTValue::DynamicScript(ctx) => ctx, _ => panic!("pipe: invalid operator param")} , agg)),
+            Some(val) => {
+             let x = ctx.get_param("operator").unwrap();
+             let iter = x.into_iter();
+             iter.fold(val, |agg, dynamic_script| 
+                step(match dynamic_script { RTValue::DynamicScript(ctx) => ctx, _ => panic!("pipe: invalid operator param")} , agg))
+             },    
             None => RTValue::Error("Pipe: Missing No source param".to_string())
         }
     }
     fn debug_info(&self) -> String { "Pipe".to_string() }
 }
-
 fn step(dynamic_script: Ctx, data: RTValue) -> RTValue {
     match data {
         RTValue::Shared(rc_data) => dynamic_script.set_data(rc_data).run_itself(),
         _ => dynamic_script.set_data(Rc::new(data)).run_itself()
     }
+}
+
+struct ToUpper;
+impl RustImpl for ToUpper {
+    fn run(&self, ctx: &Ctx) -> RTValue {
+        let val : &RTValue = &ctx.data;
+        match val {
+            RTValue::Array(arr) => RTValue::Array(arr.into_iter().map(|x| match x {
+                RTValue::StaticString(s) => RTValue::DynString(s.to_uppercase()),
+                RTValue::DynString(s) => RTValue::DynString(s.to_uppercase()),
+                _ => RTValue::Error("ToUpper non string as input".to_string())
+            }).collect()),
+            RTValue::StaticStringArray(arr) => RTValue::Array(arr.into_iter().map(|x| RTValue::DynString(x.to_uppercase())).collect()),
+            RTValue::StaticString(s) => RTValue::DynString(s.to_uppercase()),
+            RTValue::DynString(s) => RTValue::DynString(s.to_uppercase()),
+            _ => RTValue::Error("ToUpper non string as input".to_string())
+        }
+    }
+    fn debug_info(&self) -> String { "Pipe".to_string() }
 }
 
 struct Split;
@@ -121,8 +142,14 @@ fn init() {
             params: vec![Param::new("separator")], 
             r#impl: TgpValue::RustImpl(Arc::new(Split)), 
         });
+        COMPS.add("toUpper", Comp{
+            id: "toUpper",
+            r#type: "data",
+            params: vec![], 
+            r#impl: TgpValue::RustImpl(Arc::new(ToUpper)), 
+        });        
         COMPS.add("splitTest", Comp {
-            id: "splitTest", 
+            id: "splitTest",
             r#type: "data",
             params: vec![],         
             r#impl: Profile::new("split", hashmap!{"separator" => TgpValue::StaticString("\n")}), 
@@ -133,7 +160,10 @@ fn init() {
             params: vec![],         
             r#impl:Profile::new("pipe", hashmap!{
                 "source" => TgpValue::StaticString("a,b,c"),
-                "operator" => Profile::new("split", hashmap!{"separator" => TgpValue::StaticString(",")})
+                "operator" => TgpValue::Array(vec![
+                    Profile::new("split", hashmap!{"separator" => TgpValue::StaticString(",")}),
+                    Profile::new("toUpper", hashmap!{})
+                ])
             }) 
         });
 }
