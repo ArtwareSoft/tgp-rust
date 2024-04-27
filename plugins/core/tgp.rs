@@ -1,16 +1,16 @@
+use std::rc::Rc;
 use std::{collections::HashMap as StdHashMap };
 use lazy_static::lazy_static;
-use once_cell::sync::Lazy;
 extern crate lazy_static;
-use std::collections::HashSet;
-use std::sync::Mutex;
+use std::collections::{HashSet, HashMap};
+use std::sync::{Arc, Mutex};
 use std::any::Any;
+use std::clone::Clone;
 use ctor::ctor;
 
 lazy_static! {
     pub static ref COMPS: Comps = Mutex::new(StdHashMap::new());
     pub static ref DATA_PARAM: Param = Param { id: "data", r#type: None, dynamic: false, default_value: None };
-//    pub static ref COMPILED: Mutex<StdHashMap<StaticString, Box<dyn RustImpl + 'static>>> = Mutex::new(StdHashMap::new());
     pub static ref NOP: TgpValue = TgpValue::Nop();
 
     static ref GLOBAL_STRINGS: Mutex<HashSet<&'static str>> = Mutex::new(HashSet::new());
@@ -115,14 +115,17 @@ struct File {
     plugin_dsl: StaticString
 }
 
+
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub pt: StaticString,
-    pub props: StdHashMap<StaticString, &'static TgpValue>,
+    pub props: StdHashMap<StaticString, TgpValue>,
     pub unresolved_pt: StaticString,
 }
 impl Profile {
-    pub const fn new(pt: StaticString, props: StdHashMap<StaticString, &'static TgpValue>) -> Self { Profile {pt, props, unresolved_pt: "" } }
+    pub const fn new(pt: StaticString, props: StdHashMap<StaticString, TgpValue>) -> TgpValue { 
+        TgpValue::Profile(Profile {pt, props, unresolved_pt: "" } , None)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -136,7 +139,7 @@ pub enum SomeVarsDef {
     VarsDef(Vec<(StaticString, Option<&'static TgpValue>)>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TgpValue {
     StaticString(StaticString),
     String(String),
@@ -144,7 +147,7 @@ pub enum TgpValue {
     Boolean(bool),
     Profile(Profile, Option<&'static ExtendCtx>),
     ConstsOnlyProfile(ConstsOnlyProfile),
-    RustImpl(Box<dyn RustImpl>),
+    RustImpl(Arc<dyn RustImpl>),
     Array(Vec<&'static TgpValue>),
     Nop()
 }
@@ -152,12 +155,11 @@ pub enum TgpValue {
 impl Default for TgpValue {
     fn default() -> Self { TgpValue::Nop() }
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConstsOnlyProfile {
     pub unresolved_pt: StaticString,
     pub pt: StaticString,
     pub props: StdHashMap<StaticString, TgpValue>,
-    pub cached_params: &'static StdHashMap<StaticString, TgpValue>,
 }
 
 use super::rt::{RTValue, Ctx};

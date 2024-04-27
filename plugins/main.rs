@@ -7,7 +7,7 @@ mod common;
 
 fn main() {
     {
-        if let Some(comp) = COMPS.get("splitTest") {
+        if let Some(comp) = COMPS.get("pipeTest") {
             let input = RTValue::StaticString("Line one\nLine two\nLine three");
             let res = jb_run(Ctx::new().set_data(Rc::new(input)).set_profile(&comp.r#impl));
             println!("{:#?}", res);
