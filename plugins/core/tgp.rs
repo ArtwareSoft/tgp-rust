@@ -1,28 +1,65 @@
-use std::{collections::HashMap as StdHashMap};
+use std::{collections::HashMap as StdHashMap };
 use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 extern crate lazy_static;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use std::any::Any;
+use ctor::ctor;
 
 lazy_static! {
-    pub static ref DATA_PARAM: Param = Param { id: "data", r#type: None, dynamic: None, default_value: None };
-    pub static ref COMPS: StdHashMap<StaticString, Comp> = StdHashMap::new();
+    pub static ref COMPS: Comps = Mutex::new(StdHashMap::new());
+    pub static ref DATA_PARAM: Param = Param { id: "data", r#type: None, dynamic: false, default_value: None };
+//    pub static ref COMPILED: Mutex<StdHashMap<StaticString, Box<dyn RustImpl + 'static>>> = Mutex::new(StdHashMap::new());
     pub static ref NOP: TgpValue = TgpValue::Nop();
 
     static ref GLOBAL_STRINGS: Mutex<HashSet<&'static str>> = Mutex::new(HashSet::new());
+}
+
+pub trait CompsTrait {
+    fn get(&self, id: &str) -> Option<&'static Comp>;
+    fn add(&self, id: &'static str, comp: Comp);
+}
+pub type Comps = Mutex<StdHashMap<StaticString, &'static Comp>>;
+impl CompsTrait for Comps {
+    fn get(&self, id: &str) -> Option<&'static Comp> {
+        let comps = self.lock().unwrap();
+        match comps.get(id) { Some(x) => Some(x), None => None }
+    }
+    fn add(&self, id: &'static str, comp: Comp) {
+        let mut comps = self.lock().unwrap();
+        comps.insert(id , Box::leak(Box::<Comp>::from(comp)));
+    }    
+}
+
+pub trait RustImpl: Any + Sync + Send + 'static {
+    fn run(&self, ctx: &Ctx) -> RTValue;
+    fn debug_info(&self) -> String;
+}
+
+#[ctor]
+fn init() { 
+    COMPS.add("Same", Comp { id: "split", r#type: "data", params: vec![], r#impl: TgpValue::Nop() })
+}
+
+lazy_static! {
+    static ref MODULE_INIT: () = { 
+        COMPS.add("Same", Comp { id: "split", r#type: "data", params: vec![],  r#impl: TgpValue::Nop() });
+    };
 }
 
 pub type StaticString = &'static str;
 
 pub fn asStaticString(input: &str) -> StaticString {
     let mut strings = GLOBAL_STRINGS.lock().unwrap();
-    if let Some(result) = strings.get(input) {
-        return result;
+    match strings.get(input) {
+        Some(result) => result,
+        None => {
+            let result = Box::leak(Box::<str>::from(input));
+            strings.insert(result);
+            result        
+        }
     }
-    let result = Box::leak(Box::<str>::from(input));
-    strings.insert(result);
-    result
 }
 
 #[derive(Debug)]
@@ -38,12 +75,16 @@ pub struct Comp {
     pub r#impl: TgpValue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Param {
     pub id: StaticString,
     pub r#type: Option<StaticString>,
-    pub dynamic: Option<bool>,
-    pub default_value: Option<TgpValue>
+    pub dynamic: bool,
+    pub default_value: Option<&'static TgpValue>
+}
+
+impl Param {
+    pub fn new(id: StaticString) -> Self { Param {id, r#type: Some("data"), dynamic: false, default_value: None} }
 }
 
 #[derive(Debug)]
@@ -74,18 +115,22 @@ struct File {
     plugin_dsl: StaticString
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Profile {
-    pub unresolved_pt: StaticString,
     pub pt: StaticString,
     pub props: StdHashMap<StaticString, &'static TgpValue>,
+    pub unresolved_pt: StaticString,
 }
-#[derive(Debug)]
+impl Profile {
+    pub const fn new(pt: StaticString, props: StdHashMap<StaticString, &'static TgpValue>) -> Self { Profile {pt, props, unresolved_pt: "" } }
+}
+
+#[derive(Debug, Clone)]
 pub struct ExtendCtx {
     pub data: Option<&'static TgpValue>,
     pub vars: Option<&'static SomeVarsDef>,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SomeVarsDef {
     VarDef(StaticString, Option<&'static TgpValue>),
     VarsDef(Vec<(StaticString, Option<&'static TgpValue>)>),
@@ -99,9 +144,8 @@ pub enum TgpValue {
     Boolean(bool),
     Profile(Profile, Option<&'static ExtendCtx>),
     ConstsOnlyProfile(ConstsOnlyProfile),
-    CompiledProfile(CompiledProfile),
+    RustImpl(Box<dyn RustImpl>),
     Array(Vec<&'static TgpValue>),
-    KnownObj(Box<dyn IKnownObj>),
     Nop()
 }
 
@@ -116,49 +160,11 @@ pub struct ConstsOnlyProfile {
     pub cached_params: &'static StdHashMap<StaticString, TgpValue>,
 }
 
-#[derive(Debug)]
-pub struct CompiledProfile {
-    pub unresolved_pt: StaticString,
-    pub pt: StaticString,
-    pub props: StdHashMap<StaticString, TgpValue>,
-    pub compiled: &'static Box<dyn IKnownObj>,
-}
-
 use super::rt::{RTValue, Ctx};
 
-pub trait IKnownObj: Any + Sync + Send {
-    fn query_interface(&self, interface: &str) -> Option<fn(ctx: Ctx, method_name: Option<&str>) -> (Ctx, RTValue)>;
-    fn debug_info(&self) -> String;
-}
-
-impl std::fmt::Debug for dyn IKnownObj + 'static {
+impl std::fmt::Debug for dyn RustImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.debug_info())
     }
 }
 
-/*
-To implement
-comp('DirectoryToComps', {
-    params: [
-        {id: 'basePath', as: 'string' },
-        {id: 'topPlugins', as: 'array' },
-        {id: 'modelOnly', as: 'boolean' },
-    ],
-    impl: pipe(
-        directoryContent('%$basePath%','*.js|*.tgp'),
-        filesToPlugins(),
-        extend('using', pipeline('%files/content%', tgpProp('using'), unique())),
-        sortByOneToManyRelation('id','using'),
-        concatMap(
-            Var('plugin'),
-            '%files%',
-            Var('dsl', tgpProp('dsl')),
-            splitComps(),
-            extendWithParser('id','type','params', 'dsl', { parser: compHeader() } ),
-            resolveTypeAndExtendTgpModel(), // cmps->cmps with $tgpModel
-        )
-        if('%$modelOnly%','%%', parseComp(cmpParser())) // cmp -> cmp with tgpModel 
-    )
-})
-*/
