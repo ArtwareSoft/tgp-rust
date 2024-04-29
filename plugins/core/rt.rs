@@ -39,26 +39,32 @@ impl Ctx {
             params: Rc::clone(&self.params), cmp_ctx: self.cmp_ctx.as_ref().map(Rc::clone),
         }
     }
-    pub fn profile_and_path(&self, profile: &'static TgpValue, parent_param: &'static Param, path: StaticString) -> Self {
-        Ctx { profile, path , parent_param: Some(parent_param), 
+    pub fn profile_and_path(&self, profile: &'static TgpValue, parent_param: &'static Param, path: &str) -> Self {
+        Ctx { profile, path: asStaticString(path)  , parent_param: Some(parent_param), 
             data: Rc::clone(&self.data), vars: Rc::clone(&self.vars), 
             params: Rc::clone(&self.params), cmp_ctx: self.cmp_ctx.as_ref().map(Rc::clone),
         }
-    }    
-    pub fn inner_profile(&self, profile: &'static Profile, parent_param: &'static Param) -> Self {
-        let param_id = parent_param.id;
-        self.profile_and_path(&profile.props[param_id], parent_param, asStaticString(&format!("{}/{param_id}", self.path)))
     }
-    pub fn inner_profile_in_array(&self, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Self {
+    pub fn inner_profile(&self, profile: &'static Profile, parent_param: &'static Param) -> Option<Self> {
         let param_id = parent_param.id;
-        self.profile_and_path(inner_profile, parent_param, asStaticString(&format!("{}/{param_id}/{index}", self.path)))
+        match profile.props.get(param_id) {
+            Some(val) => Some(self.profile_and_path(val, parent_param, &format!("{}~{param_id}", self.path))),
+            None => match parent_param.default_value {
+                Some(v) => Some(self.profile_and_path(v, parent_param, &format!("{}~params~{param_id}~defaultValue", profile.pt))),
+                None => None
+            }
+        }        
+    }
+    pub fn inner_profile_in_array(&self, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Option<Self> {
+        let param_id = parent_param.id;
+        Some(self.profile_and_path(inner_profile, parent_param, &format!("{}~{param_id}~{index}", self.path)))
     }
     pub fn new_comp(&self, params: HashMap<StaticString, RTValue>, comp: &'static Comp) -> Self {
         let pt = comp.id;
         Ctx { 
             cmp_ctx: Some(Rc::new(self.clone())),
             params: Rc::new(params),
-            path: asStaticString(&format!("{pt}/impl")),
+            path: asStaticString(&format!("{pt}~impl")),
             profile: &comp.r#impl, parent_param: self.parent_param,
             data: Rc::clone(&self.data), vars: Rc::clone(&self.vars), 
         }
@@ -66,11 +72,18 @@ impl Ctx {
     pub fn get_param(&self, param_id: &str) -> Option<RTValue> {
         self.params.get(param_id).map_or(None, |v| Some(v.clone()))
     }
+    pub fn get_string_param(&self, param_id: &str) -> &str {
+        self.params.get(param_id).map_or("", |v| match v {
+            RTValue::StaticString(s) => s,
+            RTValue::DynString(s) => s,
+            _ => "",
+        })
+    }
     pub fn calc_dynamic_param(&self, param_id: &str, data: Option<Data>, vars : Option<Vars>) -> Option<RTValue> {
         self.params.get(param_id).map_or(None, |p_value| {
             let p_val : &RTValue = &p_value;
             match p_val {
-                RTValue::DynamicScript(run_ctx) => Some(jb_run(match (data, vars) {
+                RTValue::Func(run_ctx) => Some(jb_run(match (data, vars) {
                     (None, None) => run_ctx.clone(),
                     (None, Some(vars)) => run_ctx.set_vars(vars),
                     (Some(data), None) => run_ctx.set_data(data),
@@ -89,7 +102,7 @@ impl Ctx {
     }
     pub fn extend(&self, extend_ctx: &'static ExtendCtx) -> Ctx {
         let data_ctx = match extend_ctx.data {
-            Some(profile) => self.set_data(Rc::new(jb_run(self.profile_and_path(profile, &DATA_PARAM, asStaticString(&format!("{}/data", self.path)))))),
+            Some(profile) => self.set_data(Rc::new(jb_run(self.profile_and_path(profile, &DATA_PARAM, &format!("{}/data", self.path))))),
             None => self.clone(),
         };
 
@@ -99,7 +112,7 @@ impl Ctx {
                     let mut new_hash = (*data_ctx.vars).clone();
                     for (i, var) in vars.iter().enumerate() {
                         new_hash.insert(var.0 , jb_run(
-                            data_ctx.profile_and_path(var.1.unwrap_or(&NOP), &DATA_PARAM, asStaticString(&format!("{}/$vars/{i}", data_ctx.path)))
+                            data_ctx.profile_and_path(var.1.unwrap_or(&NOP), &DATA_PARAM, &format!("{}/$vars/{i}", data_ctx.path))
                         ));                            
                     }
                     data_ctx.set_vars(Rc::new(new_hash))
@@ -107,7 +120,7 @@ impl Ctx {
                 SomeVarsDef::VarDef(id, val ) => {
                     let mut new_hash = (*data_ctx.vars).clone();
                     new_hash.insert(id , jb_run(
-                        data_ctx.profile_and_path(val.unwrap_or(&NOP), &DATA_PARAM, asStaticString(&format!("{}/$vars", data_ctx.path)))
+                        data_ctx.profile_and_path(val.unwrap_or(&NOP), &DATA_PARAM, &format!("{}/$vars", data_ctx.path))
                     ));
                     data_ctx.set_vars(Rc::new(new_hash))
                 }
@@ -124,48 +137,65 @@ pub enum RTValue {
     Null,
     StaticString(StaticString),
     I32(i32),
+    F64(f64),
     Boolean(bool),
     DynString(String),
     IntArray(Vec<i32>),
     StaticStringArray(Vec<StaticString>),
-    EmptyArray(),
     Shared(Rc<RTValue>),
     Array(Vec<RTValue>),
     Obj(RTObj),
-    Error(String),
-    DynamicScript(Ctx),
-    DynamicScripts(Vec<Ctx>)
+    Error(String, Option<Ctx>),
+    Func(Ctx),
 }
 
 
 pub fn jb_run(ctx: Ctx) -> RTValue {
     match ctx.profile {
-        TgpValue::StaticString(s) => RTValue::StaticString(*s),
-        TgpValue::String(s) => RTValue::DynString(s.clone()),
+        TgpValue::String(s) => RTValue::StaticString(*s),
         TgpValue::I32(n) => RTValue::I32(*n),
+        TgpValue::F64(n) => RTValue::F64(*n),
         TgpValue::Boolean(b) => RTValue::Boolean(*b),
         TgpValue::Array(_) => panic!("no run array"),
-        TgpValue::ConstsOnlyProfile(const_profile) => {
-            let pt = const_profile.pt;
-            jb_run(ctx.set_profile(&COMPS.get(pt).unwrap().r#impl))
-        },
-        TgpValue::RustImpl(profile) => profile.run(&ctx),        
-        TgpValue::Profile(profile, extend_ctx) => {
-            let new_ctx = extend_ctx.map_or(ctx.clone(), |extend_ctx| ctx.extend(extend_ctx));
-            let pt = profile.pt;
-            let comp = COMPS.get(pt).unwrap();
-            let params: HashMap<StaticString, RTValue> = comp.params.iter().map(|parent_param| {
-                let param_id = parent_param.id;
-                match &profile.props[param_id] {
-                    TgpValue::Array(inner_array) => (param_id, RTValue::DynamicScripts(inner_array.iter().enumerate()
-                      .map(|(i,inner_profile)| 
-                          new_ctx.inner_profile_in_array(inner_profile, parent_param, i)).collect())),
-                    _ => (param_id, RTValue::DynamicScript(new_ctx.inner_profile(profile, parent_param)))
-                }
-            }).collect();
-            jb_run(new_ctx.new_comp(params, comp))
-        }
+        TgpValue::RustImpl(profile) => profile.run(&ctx),
+        TgpValue::Profile(profile) => run_profile(profile, &ctx),
+        TgpValue::ProfileExtendsCtx(profile, extend_ctx) => run_profile(profile, &ctx.extend(extend_ctx)),
         TgpValue::Nop() => (*ctx.data).clone(),
+        TgpValue::Err(s) => panic!("{}",s),
     }
 }
 
+fn run_profile(profile: &'static Profile, ctx: &Ctx) -> RTValue {
+    let pt = profile.pt;
+    match COMPS.get(pt) {
+        Some(comp) => {
+            let params: HashMap<StaticString, RTValue> = comp.params.iter().map(|parent_param| {
+                let param_id = parent_param.id;
+                match profile.props.get(param_id) {
+                    Some(val) => match val {
+                        TgpValue::Array(inner_array) => (param_id, RTValue::Array(inner_array.iter().enumerate()
+                            .map(|(i,inner_profile)| static_or_dynamic(ctx.inner_profile_in_array(inner_profile, parent_param, i))).collect())),
+                        _ => (param_id, static_or_dynamic(ctx.inner_profile(profile, parent_param)))
+                    },
+                    None => (param_id, static_or_dynamic(ctx.inner_profile(profile, parent_param)))
+                }
+            }).collect();
+            jb_run(ctx.new_comp(params, comp))        
+
+        },
+        None => RTValue::Error(format!("can not find pt {}",pt), Some(ctx.clone()))
+    }
+}
+
+fn static_or_dynamic(opt_ctx: Option<Ctx>) -> RTValue {
+    match opt_ctx {
+        Some(ctx) => match ctx.profile {
+            TgpValue::String(s) => if s.contains("%") {RTValue::Func(ctx)} else {RTValue::StaticString(s)},
+            TgpValue::I32(n) => RTValue::I32(*n),
+            TgpValue::F64(n) => RTValue::F64(*n),
+            TgpValue::Boolean(b) => RTValue::Boolean(*b),
+            _ => RTValue::Func(ctx),        
+        },
+        None => RTValue::Null
+    }
+}

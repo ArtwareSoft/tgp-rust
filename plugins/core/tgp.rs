@@ -1,18 +1,18 @@
-use std::rc::Rc;
-use std::{collections::HashMap as StdHashMap };
+pub use std::{collections::HashMap as StdHashMap };
 use lazy_static::lazy_static;
+use serde_json::{Map, Number, Value};
 extern crate lazy_static;
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashSet};
 use std::sync::{Arc, Mutex};
 use std::any::Any;
 use std::clone::Clone;
-use ctor::ctor;
+use super::rt::{RTValue, Ctx};
 
 lazy_static! {
     pub static ref COMPS: Comps = Mutex::new(StdHashMap::new());
-    pub static ref DATA_PARAM: Param = Param { id: "data", r#type: None, dynamic: false, default_value: None };
+    pub static ref DATA_PARAM: Param = Param { id: "data", r#type: None, default_value: None };
     pub static ref NOP: TgpValue = TgpValue::Nop();
-
+    static ref GLOBAL_TgpValues: Mutex<StdHashMap<StaticString, &'static TgpValue>> = Mutex::new(StdHashMap::new());
     static ref GLOBAL_STRINGS: Mutex<HashSet<&'static str>> = Mutex::new(HashSet::new());
 }
 
@@ -32,20 +32,8 @@ impl CompsTrait for Comps {
     }    
 }
 
-pub trait RustImpl: Any + Sync + Send + 'static {
+pub trait RustImpl: Any + Sync + Send + std::fmt::Debug + 'static {
     fn run(&self, ctx: &Ctx) -> RTValue;
-    fn debug_info(&self) -> String;
-}
-
-#[ctor]
-fn init() { 
-    COMPS.add("Same", Comp { id: "split", r#type: "data", params: vec![], r#impl: TgpValue::Nop() })
-}
-
-lazy_static! {
-    static ref MODULE_INIT: () = { 
-        COMPS.add("Same", Comp { id: "split", r#type: "data", params: vec![],  r#impl: TgpValue::Nop() });
-    };
 }
 
 pub type StaticString = &'static str;
@@ -63,11 +51,6 @@ pub fn asStaticString(input: &str) -> StaticString {
 }
 
 #[derive(Debug)]
-pub struct TgpModel {
-    pub comps: StdHashMap<StaticString, Comp>,
-    pub plugins: Vec<Plugin>
-}
-#[derive(Debug)]
 pub struct Comp {
     pub r#type: StaticString,
     pub id: StaticString,
@@ -79,52 +62,21 @@ pub struct Comp {
 pub struct Param {
     pub id: StaticString,
     pub r#type: Option<StaticString>,
-    pub dynamic: bool,
     pub default_value: Option<&'static TgpValue>
 }
 
 impl Param {
-    pub fn new(id: StaticString) -> Self { Param {id, r#type: Some("data"), dynamic: false, default_value: None} }
+    pub fn new(id: StaticString) -> Self { Param {id, r#type: Some("data"), default_value: None} }
 }
-
-#[derive(Debug)]
-pub struct Plugin {
-    comps: Vec<Comp>,
-    base_dir: StaticString,
-    dsl: StaticString,
-    files: Vec<String>,
-    dependent: Vec<StaticString>
-}
-
-#[derive(Debug)]
-struct RawPluginDir {
-    base_dir: String,
-    files: Vec<File>,
-}
-#[derive(Debug)]
-struct RawFile {
-    path: String,
-    content: String,
-}
-#[derive(Debug)]
-struct File {
-    path: String,
-    content: String,
-    using: Vec<StaticString>,
-    dsl: StaticString,
-    plugin_dsl: StaticString
-}
-
 
 #[derive(Debug, Clone)]
 pub struct Profile {
     pub pt: StaticString,
     pub props: StdHashMap<StaticString, TgpValue>,
-    pub unresolved_pt: StaticString,
 }
 impl Profile {
     pub const fn new(pt: StaticString, props: StdHashMap<StaticString, TgpValue>) -> TgpValue { 
-        TgpValue::Profile(Profile {pt, props, unresolved_pt: "" } , None)
+        TgpValue::Profile(Profile {pt, props })
     }
 }
 
@@ -141,15 +93,72 @@ pub enum SomeVarsDef {
 
 #[derive(Debug, Clone)]
 pub enum TgpValue {
-    StaticString(StaticString),
-    String(String),
+    String(StaticString),
     I32(i32),
+    F64(f64),
     Boolean(bool),
-    Profile(Profile, Option<&'static ExtendCtx>),
-    ConstsOnlyProfile(ConstsOnlyProfile),
+    ProfileExtendsCtx(Profile, &'static ExtendCtx),
+    Profile(Profile),
     RustImpl(Arc<dyn RustImpl>),
     Array(Vec<TgpValue>),
-    Nop()
+    Nop(),
+    Err(String)
+}
+impl TgpValue {
+    pub fn parse_json(json: &str) -> &'static TgpValue {
+        let globals_ro = GLOBAL_TgpValues.lock().unwrap();
+        match globals_ro.get(json) { 
+            Some(x) => x, 
+            None => {
+                drop(globals_ro);
+                let val = TgpValue::from_json(serde_json::from_str(json).unwrap());
+                let st_val = Box::leak(Box::<TgpValue>::from(val));
+                let mut globals = GLOBAL_TgpValues.lock().unwrap();
+                globals.insert(asStaticString(json) , st_val);
+                st_val
+            }
+        }
+    }
+    fn from_json(value: Value) -> TgpValue {
+        match value {
+            Value::String(s) => TgpValue::String(asStaticString(&s)),
+            Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    TgpValue::I32(i as i32)
+                } else if let Some(i) = n.as_f64() {
+                    TgpValue::F64(i as f64)
+                } else {
+                    TgpValue::Err("Unsupported number type".to_string())
+                }
+            },
+            Value::Bool(b) => TgpValue::Boolean(b),
+            Value::Object(obj) => {
+                let props: StdHashMap<StaticString, TgpValue> = obj.clone().into_iter().filter(|(key, _)| "$$" != key)
+                    .map(|(key, value)| (asStaticString(&key), TgpValue::from_json(value))).collect();
+                let pt = match obj.get("$$").unwrap() { Value::String(s) => asStaticString(s), _ => "" };
+                TgpValue::Profile(Profile { pt, props })        
+            },
+            Value::Array(ar) => TgpValue::Array(ar.into_iter().map(|v| TgpValue::from_json(v)).collect()),
+            _ => TgpValue::Err(format!("Unsupported json type: {}", value))
+        }
+    }
+}
+
+impl Comp {
+    pub fn parse_json(json: &str) -> &'static TgpValue {
+        let globals_ro = GLOBAL_TgpValues.lock().unwrap();
+        match globals_ro.get(json) { 
+            Some(x) => x, 
+            None => {
+                drop(globals_ro);
+                let val = TgpValue::from_json(serde_json::from_str(json).unwrap());
+                let st_val = Box::leak(Box::<TgpValue>::from(val));
+                let mut globals = GLOBAL_TgpValues.lock().unwrap();
+                globals.insert(asStaticString(json) , st_val);
+                st_val
+            }
+        }
+    }
 }
 
 impl Default for TgpValue {
@@ -157,16 +166,6 @@ impl Default for TgpValue {
 }
 #[derive(Debug, Clone)]
 pub struct ConstsOnlyProfile {
-    pub unresolved_pt: StaticString,
     pub pt: StaticString,
-    pub props: StdHashMap<StaticString, TgpValue>,
+    pub props: StdHashMap<StaticString, TgpValue>
 }
-
-use super::rt::{RTValue, Ctx};
-
-impl std::fmt::Debug for dyn RustImpl {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.debug_info())
-    }
-}
-

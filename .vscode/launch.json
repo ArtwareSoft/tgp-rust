@@ -6,13 +6,13 @@
             "request": "launch",
             "name": "Debug Rust Project",
             "cargo": {
-                "args": ["build"],
+                "args": ["build", "--bin", "tgp_rust"],  // Ensure the binary is explicitly specified
                 "filter": {
                     "name": "tgp_rust",
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": ["-runCtx:{\"a\": 5}"],  // Ensure this matches exactly how it works in CLI
             "cwd": "${workspaceFolder}"
         }
     ]
