@@ -1,7 +1,7 @@
 use std::{collections::HashMap as StdHashMap, rc::Rc};
 use std::collections::HashMap;
 
-use super::tgp::{COMPS, Comp, Param, TgpValue, StaticString, asStaticString, DATA_PARAM, NOP, ExtendCtx, SomeVarsDef, Profile, CompsTrait };
+use super::tgp::{COMPS, Comp, Param, TgpValue, StaticString, as_static, DATA_PARAM, NOP, ExtendCtx, SomeVarsDef, Profile, CompsTrait };
 
 pub type Data = Rc<RTValue>;
 pub type Vars = Rc<StdHashMap<StaticString, RTValue>>;
@@ -40,7 +40,7 @@ impl Ctx {
         }
     }
     pub fn profile_and_path(&self, profile: &'static TgpValue, parent_param: &'static Param, path: &str) -> Self {
-        Ctx { profile, path: asStaticString(path)  , parent_param: Some(parent_param), 
+        Ctx { profile, path: as_static(path)  , parent_param: Some(parent_param), 
             data: Rc::clone(&self.data), vars: Rc::clone(&self.vars), 
             params: Rc::clone(&self.params), cmp_ctx: self.cmp_ctx.as_ref().map(Rc::clone),
         }
@@ -64,7 +64,7 @@ impl Ctx {
         Ctx { 
             cmp_ctx: Some(Rc::new(self.clone())),
             params: Rc::new(params),
-            path: asStaticString(&format!("{pt}~impl")),
+            path: as_static(&format!("{pt}~impl")),
             profile: &comp.r#impl, parent_param: self.parent_param,
             data: Rc::clone(&self.data), vars: Rc::clone(&self.vars), 
         }
@@ -107,7 +107,7 @@ impl Ctx {
         };
 
         let vars_ctx = match extend_ctx.vars {
-            Some(someVarsDef) => match someVarsDef {
+            Some(some_vars_def) => match some_vars_def {
                 SomeVarsDef::VarsDef(vars ) => {
                     let mut new_hash = (*data_ctx.vars).clone();
                     for (i, var) in vars.iter().enumerate() {
@@ -156,7 +156,8 @@ pub fn jb_run(ctx: Ctx) -> RTValue {
         TgpValue::I32(n) => RTValue::I32(*n),
         TgpValue::F64(n) => RTValue::F64(*n),
         TgpValue::Boolean(b) => RTValue::Boolean(*b),
-        TgpValue::Array(_) => panic!("no run array"),
+        TgpValue::Array(_) => panic!("as Is"),
+        TgpValue::Obj(_) => panic!("as Is"),
         TgpValue::RustImpl(profile) => profile.run(&ctx),
         TgpValue::Profile(profile) => run_profile(profile, &ctx),
         TgpValue::ProfileExtendsCtx(profile, extend_ctx) => run_profile(profile, &ctx.extend(extend_ctx)),

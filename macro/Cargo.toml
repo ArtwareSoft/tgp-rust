@@ -1,0 +1,18 @@
+cargo-features = ["edition2024"]
+
+[package]
+name = "tgp_macro"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+proc-macro=true
+path= "./lib.rs"
+
+[dependencies]
+paste = "1.0"
+proc-macro2 = "1.0.82"
+syn = "2.0.61"
+quote = "1.0.36"
+litrs = "0.4.1"
+ctor = "0.1.22"

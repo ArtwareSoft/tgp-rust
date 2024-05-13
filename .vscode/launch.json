@@ -13,7 +13,7 @@
                 }
             },
             "args": ["-runCtx:{\"a\": 5}"],  // Ensure this matches exactly how it works in CLI
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}/projects/tgp-test"
         }
     ]
 }

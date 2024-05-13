@@ -1,10 +1,6 @@
-use core::{rt::{Ctx}, tgp::{COMPS, CompsTrait }};
-
-mod core;
-mod common;
-use std::env;
-
-use crate::core::tgp::TgpValue;
+use tgp::core::{rt::Ctx, tgp::TgpValue};
+use ctor::ctor;
+//use tgp_macro::tgp_value;
 
 // fn main() {
 // //    let args: Vec<String> = env::args().collect();
@@ -32,11 +28,17 @@ fn test_parse_json() {
         "source": "a,b,c",
         "operator": [ {"$$" : "split" }, {"$$" : "toUpperCase"} ]
     }"#;
-    let json_text2 = r#"{
+    let _json_text2 = r#"{
         "$$": "pipe",
         "source": "a,b,c,d",
         "operator": [ {"$$" : "split", "separator": ","}, {"$$" : "toUpperCase"} ]
     }"#;    
     println!("{:#?}", Ctx::new().set_profile(TgpValue::parse_json(json_text)).run_itself());
     //println!("{:#?}", Ctx::new().set_profile(TgpValue::parse_json(json_text2)).run_itself());
+}
+
+#[ctor]
+fn init() {
+    //literal_value!(dsfsdf);
+    println!("{}", "Hello");
 }
