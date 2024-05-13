@@ -10,9 +10,6 @@ proc-macro=true
 path= "./lib.rs"
 
 [dependencies]
-paste = "1.0"
-proc-macro2 = "1.0.82"
 syn = "2.0.61"
-quote = "1.0.36"
-litrs = "0.4.1"
-ctor = "0.1.22"
+tgp_parse = { path = "../tgp_parse" }
+

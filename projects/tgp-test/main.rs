@@ -1,6 +1,9 @@
-use tgp::core::{rt::Ctx, tgp::TgpValue};
+use tgp::core::{rt::Ctx};
+use tgp::core::tgp::{COMPS, Comp, Param, TgpValue, StaticString, as_static, DATA_PARAM, NOP, ExtendCtx, SomeVarsDef, Profile, CompsTrait };
+
 use ctor::ctor;
-//use tgp_macro::tgp_value;
+use tgp_macro::{tgp_value,tgp_value_from_string,comp};
+use lazy_static::lazy_static;
 
 // fn main() {
 // //    let args: Vec<String> = env::args().collect();
@@ -38,7 +41,51 @@ fn test_parse_json() {
 }
 
 #[ctor]
-fn init() {
+fn init1() {
     //literal_value!(dsfsdf);
-    println!("{}", "Hello");
+    //println!("{}", "Hello");
 }
+
+// lazy_static! {
+//     static ref A: TgpValue = comp!("a", {
+//         params: [ 
+//             { id: "aa", type: "hello[]", defaultValue: myProf("aa",3)},
+//             { id: "bb", type: "hello[]", defaultValue: myProf("aa",3)},
+//         ],
+//         impl: () => {}
+//     });
+// }
+
+#[ctor]
+fn init2() {
+    //println!("{:?}", tgp_value! ( () => {}));
+//     println!("{:?}", tgp_value!(jbComp {
+//         id: "pipe",  elems: [3],
+//     }
+// ));
+    // println!("{:?}", tgp_value_from_string!(r#"component('a', {
+    //     params: [ { id: 'aa'}],
+    //     impl: 5
+    // })"#));
+    println!("{:?}", comp!("a", {
+        params: [ 
+            { id: "aa", type: "hello[]", defaultValue: myProf("aa",3)},
+            { id: "bb", type: "hello[]", defaultValue: myProf("aa",3)},
+        ],
+        impl: 5
+    }));
+    // println!("{:?}", tgp_value_from_string!(r#"component('a', {
+    //     impl: dataTest(pipeline(Var('a', 1), list('%$a%',2), join()), equals('1,2'))
+    //   })"#));
+    //println!("{:?}", tgp_value! ( dataTest { calc: 5, expectedResult: equals {to : 5 }} ));
+}
+
+// component!( pipeTest, { 
+//     type: "data",
+//     impl: pipe {source: "a,b,c", operator: [split(","), toUpperCase()]}
+// });
+
+// #[ctor]
+// fn init() {
+//     print!("{}", to_tgp_value! ( dataTest { calc: 5, expectedResult: equals {to : 5 }} ));
+// }

@@ -12,6 +12,9 @@ path1 = "plugins/wgpu/hello-compute.rs"
 
 [dependencies]
 tgp = { path = "./plugins" }
-tgp_macro = { path = "./macro" }
 ctor = "0.1.22"
+lazy_static = "1.4"
+tgp_macro = { path = "./tgp_macro" }
+tgp_parse = { path = "./tgp_parse" }
+
 

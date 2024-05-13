@@ -7,9 +7,7 @@ use std::sync::{Arc, Mutex};
 use std::any::{Any};
 use std::clone::Clone;
 use super::rt::{RTValue, Ctx};
-use ctor::ctor;
 extern crate paste;
-use tgp_macro::{tgp_value,tgp_val_from_string, comp};
 
 lazy_static! {
     pub static ref COMPS: Comps = Mutex::new(StdHashMap::new());
@@ -138,6 +136,7 @@ pub enum TgpValue {
     Boolean(bool),
     ProfileExtendsCtx(Profile, &'static ExtendCtx),
     Profile(Profile),
+    ProfileByValue(StaticString, Vec<TgpValue>),
     RustImpl(Arc<dyn RustImpl>),
     Array(Vec<TgpValue>),
     Obj(StdHashMap<StaticString, TgpValue>),
@@ -208,27 +207,6 @@ impl Default for TgpValue {
     fn default() -> Self { TgpValue::Nop() }
 }
 
-#[ctor]
-fn init() {
-//     println!("{:?}", tgp_value!(jbComp {
-//         id: "pipe",  elems: [3],
-//     }
-// ));
-    //println!("{:?}", tgp_value!(aa{a: "aaa"}));
-    println!("{:?}", tgp_val_from_string!("aa{a: 'aaa'}"));
-    //println!("{:?}", tgp_value! ( dataTest { calc: 5, expectedResult: equals {to : 5 }} ));
-}
-
 pub trait RustImpl: Any + Sync + Send + std::fmt::Debug + 'static {
     fn run(&self, ctx: &Ctx) -> RTValue;
 }
-
-// component!( pipeTest, { 
-//     type: "data",
-//     impl: pipe {source: "a,b,c", operator: [split(","), toUpperCase()]}
-// });
-
-// #[ctor]
-// fn init() {
-//     print!("{}", to_tgp_value! ( dataTest { calc: 5, expectedResult: equals {to : 5 }} ));
-// }
