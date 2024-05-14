@@ -58,7 +58,7 @@ fn init1() {
 
 #[ctor]
 fn init2() {
-    //println!("{:?}", tgp_value! ( () => {}));
+    println!("{:?}", tgp_value!(a(5, {a : a, b: 3})));
 //     println!("{:?}", tgp_value!(jbComp {
 //         id: "pipe",  elems: [3],
 //     }
@@ -67,13 +67,13 @@ fn init2() {
     //     params: [ { id: 'aa'}],
     //     impl: 5
     // })"#));
-    println!("{:?}", comp!("a", {
-        params: [ 
-            { id: "aa", type: "hello[]", defaultValue: myProf("aa",3)},
-            { id: "bb", type: "hello[]", defaultValue: myProf("aa",3)},
-        ],
-        impl: 5
-    }));
+    // println!("{:?}", comp!("a", {
+    //     params: [ 
+    //         { id: "aa", type: "hello[]", defaultValue: myProf("aa",3)},
+    //         { id: "bb", type: "hello[]", defaultValue: myProf("aa",3)},
+    //     ],
+    //     impl: 5
+    // }));
     // println!("{:?}", tgp_value_from_string!(r#"component('a', {
     //     impl: dataTest(pipeline(Var('a', 1), list('%$a%',2), join()), equals('1,2'))
     //   })"#));

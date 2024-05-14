@@ -141,6 +141,7 @@ dependencies = [
  "lazy_static",
  "maplit",
  "paste",
+ "proc-macro2",
  "serde_json",
  "tgp_parse",
 ]

@@ -8,6 +8,7 @@ use std::any::{Any};
 use std::clone::Clone;
 use super::rt::{RTValue, Ctx};
 extern crate paste;
+use proc_macro2::{TokenTree};
 
 lazy_static! {
     pub static ref COMPS: Comps = Mutex::new(StdHashMap::new());
@@ -141,6 +142,8 @@ pub enum TgpValue {
     Array(Vec<TgpValue>),
     Obj(StdHashMap<StaticString, TgpValue>),
     Nop(),
+    Iden(StaticString),
+    JsFunc(StaticString),
     Err(String)
 }
 impl TgpValue {

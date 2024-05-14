@@ -163,7 +163,9 @@ pub fn jb_run(ctx: Ctx) -> RTValue {
         TgpValue::ProfileExtendsCtx(profile, extend_ctx) => run_profile(profile, &ctx.extend(extend_ctx)),
         TgpValue::Nop() => (*ctx.data).clone(),
         TgpValue::Err(s) => panic!("{}",s),
-        TgpValue::ProfileByValue(pt,vec) => panic!("{} {:?}",pt,vec),
+        TgpValue::ProfileByValue(pt,vec) => panic!("ProfileByValue {} {:?}",pt,vec),
+        TgpValue::Iden(s) => panic!("Iden {}",s),
+        TgpValue::JsFunc(s) => panic!("JsFunc {}",s),
     }
 }
 
