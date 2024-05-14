@@ -52,7 +52,19 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
                 proc_macro2::Delimiter::None => return Err(Error::new(g.span(), "expecting profile body")),
             },
             Some(TokenTree::Literal(l)) => return Err(Error::new(l.span(), "expecting profile body. use (")),
-            Some(TokenTree::Ident(i)) => return Err(Error::new(i.span(), "expecting profile body. use (")),
+            Some(TokenTree::Ident(i)) => if pt.to_string() == "fn" {
+                    let body: TokenStream = iter.collect();
+                    return Ok(quote! {{
+                        #[derive(Debug)]
+                        struct tmp;
+                        impl RustImpl for tmp {
+                            fn run #body
+                        }
+                        TgpValue::RustImpl(Arc::new(tmp)) 
+                    }})
+                } else {
+                    return Err(Error::new(i.span(), "expecting profile body. use ("))
+            },
             Some(TokenTree::Punct(p)) => return Err(Error::new(p.span(), "expecting profile body. use (")),
         },
         TokenTree::Group(g) => match g.delimiter() {

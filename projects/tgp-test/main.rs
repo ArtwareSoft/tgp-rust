@@ -1,5 +1,6 @@
-use tgp::core::{rt::Ctx};
-use tgp::core::tgp::{COMPS, Comp, Param, TgpValue, StaticString, as_static, DATA_PARAM, NOP, ExtendCtx, SomeVarsDef, Profile, CompsTrait };
+use tgp::core::rt::{Ctx, RTValue }; 
+use tgp::core::tgp::{RustImpl, COMPS, Comp, Param, TgpValue, StaticString, as_static, DATA_PARAM, NOP, ExtendCtx, SomeVarsDef, Profile, CompsTrait };
+use std::sync::Arc;
 
 use ctor::ctor;
 use tgp_macro::{tgp_value,tgp_value_from_string,comp};
@@ -58,22 +59,23 @@ fn init1() {
 
 #[ctor]
 fn init2() {
-    println!("{:?}", tgp_value!(a(5, {a : a, b: 3})));
+// println!("{:?}", tgp_value!(a(5, {a : a, b: 3})));
 //     println!("{:?}", tgp_value!(jbComp {
 //         id: "pipe",  elems: [3],
 //     }
 // ));
-    // println!("{:?}", tgp_value_from_string!(r#"component('a', {
+    // println!("{:?}", tgp_value_from_string!(r#"component(a, {
     //     params: [ { id: 'aa'}],
     //     impl: 5
     // })"#));
-    // println!("{:?}", comp!("a", {
-    //     params: [ 
-    //         { id: "aa", type: "hello[]", defaultValue: myProf("aa",3)},
-    //         { id: "bb", type: "hello[]", defaultValue: myProf("aa",3)},
-    //     ],
-    //     impl: 5
-    // }));
+    println!("{:?}", comp!(a, {
+        type: "myType<myDsl>[]",
+        params: [ 
+            param(aa, {type: array(hello), defaultValue: myProf("aa",3)}),
+            { id: vv, type: "hello[]", defaultValue: myProf("aa",3)},
+        ],
+        impl: fn run(&self, ctx: &Ctx) -> RTValue { RTValue::I32(5) }
+    }));
     // println!("{:?}", tgp_value_from_string!(r#"component('a', {
     //     impl: dataTest(pipeline(Var('a', 1), list('%$a%',2), join()), equals('1,2'))
     //   })"#));
