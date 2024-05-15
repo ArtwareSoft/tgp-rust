@@ -1,6 +1,7 @@
 
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
+mod tgp_parse;
 
 #[proc_macro]
 pub fn comp(input: TokenStream) -> TokenStream {

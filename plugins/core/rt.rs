@@ -136,11 +136,11 @@ impl Ctx {
 pub enum RTValue {
     Null,
     StaticString(StaticString),
-    I32(i32),
-    F64(f64),
+    Int(usize),
+    Float(f64),
     Boolean(bool),
     DynString(String),
-    IntArray(Vec<i32>),
+    IntArray(Vec<usize>),
     StaticStringArray(Vec<StaticString>),
     Shared(Rc<RTValue>),
     Array(Vec<RTValue>),
@@ -153,8 +153,8 @@ pub enum RTValue {
 pub fn jb_run(ctx: Ctx) -> RTValue {
     match ctx.profile {
         TgpValue::String(s) => RTValue::StaticString(*s),
-        TgpValue::I32(n) => RTValue::I32(*n),
-        TgpValue::F64(n) => RTValue::F64(*n),
+        TgpValue::Int(n) => RTValue::Int(*n),
+        TgpValue::Float(n) => RTValue::Float(*n),
         TgpValue::Boolean(b) => RTValue::Boolean(*b),
         TgpValue::Array(_) => panic!("as Is"),
         TgpValue::Obj(_) => panic!("as Is"),
@@ -195,8 +195,8 @@ fn static_or_dynamic(opt_ctx: Option<Ctx>) -> RTValue {
     match opt_ctx {
         Some(ctx) => match ctx.profile {
             TgpValue::String(s) => if s.contains("%") {RTValue::Func(ctx)} else {RTValue::StaticString(s)},
-            TgpValue::I32(n) => RTValue::I32(*n),
-            TgpValue::F64(n) => RTValue::F64(*n),
+            TgpValue::Int(n) => RTValue::Int(*n),
+            TgpValue::Float(n) => RTValue::Float(*n),
             TgpValue::Boolean(b) => RTValue::Boolean(*b),
             _ => RTValue::Func(ctx),        
         },

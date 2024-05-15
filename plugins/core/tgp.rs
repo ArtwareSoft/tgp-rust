@@ -132,8 +132,8 @@ pub enum SomeVarsDef {
 #[derive(Debug, Clone)]
 pub enum TgpValue {
     String(StaticString),
-    I32(i32),
-    F64(f64),
+    Int(usize),
+    Float(f64),
     Boolean(bool),
     ProfileExtendsCtx(Profile, &'static ExtendCtx),
     Profile(Profile),
@@ -166,9 +166,9 @@ impl TgpValue {
             Value::String(s) => TgpValue::String(as_static(&s)),
             Value::Number(n) => {
                 if let Some(i) = n.as_i64() {
-                    TgpValue::I32(i as i32)
+                    TgpValue::Int(i as usize)
                 } else if let Some(i) = n.as_f64() {
-                    TgpValue::F64(i as f64)
+                    TgpValue::Float(i as f64)
                 } else {
                     TgpValue::Err("Unsupported number type".to_string())
                 }

@@ -74,7 +74,7 @@ fn init2() {
             param(aa, {type: array(hello), defaultValue: myProf("aa",3)}),
             { id: vv, type: "hello[]", defaultValue: myProf("aa",3)},
         ],
-        impl: fn run(&self, ctx: &Ctx) -> RTValue { RTValue::I32(5) }
+        impl: fn run(&self, ctx: &Ctx) -> RTValue { RTValue::Int(5) }
     }));
     // println!("{:?}", tgp_value_from_string!(r#"component('a', {
     //     impl: dataTest(pipeline(Var('a', 1), list('%$a%',2), join()), equals('1,2'))

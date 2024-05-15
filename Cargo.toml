@@ -15,6 +15,3 @@ tgp = { path = "./plugins" }
 ctor = "0.1.22"
 lazy_static = "1.4"
 tgp_macro = { path = "./tgp_macro" }
-tgp_parse = { path = "./tgp_parse" }
-
-

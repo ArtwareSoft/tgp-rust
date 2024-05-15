@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 extern crate proc_macro;
 use litrs::Literal;
-extern crate paste;
 use proc_macro2::{TokenStream, TokenTree};
 use proc_macro2::Delimiter::{Brace, Bracket, Parenthesis};
 use syn::spanned::Spanned;
@@ -83,7 +82,7 @@ fn literal_value(input: &TokenTree) -> Result<TokenStream> {
             println!("error1");
             return Err(Error::new(input.span(), "invalid literal"))
         },
-        Ok(Literal::Integer(_)) => Ok(quote! {{ TgpValue::I32(#input) }}),
+        Ok(Literal::Integer(_)) => Ok(quote! {{ TgpValue::Int(#input) }}),
         Ok(Literal::Bool(_)) => Ok(quote! {{ TgpValue::Boolean(#input)}}),
         Ok(_) => Ok(quote! {{ TgpValue::String(#input)}})
     }

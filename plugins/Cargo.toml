@@ -9,7 +9,7 @@ edition = "2024"
 path= "./lib.rs"
 
 [dependencies]
-tgp_parse = { path = "../tgp_parse" }
+tgp_macro = { path = "../tgp_macro" }
 proc-macro2 = "1.0.82"
 lazy_static = "1.4"
 ctor = "0.1.22"
