@@ -11,6 +11,13 @@ pub fn comp(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
+pub fn dsl(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input);
+    let res = tgp_parse::dsl(input);
+    res.unwrap_or_else(|e| e.to_compile_error()).into()
+}
+
+#[proc_macro]
 pub fn tgp_value(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input);
     let res = tgp_parse::tgp_val(input);

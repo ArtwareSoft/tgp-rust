@@ -1,7 +1,8 @@
 use std::{collections::HashMap as StdHashMap, rc::Rc};
 use std::collections::HashMap;
 
-use super::tgp::{COMPS, Comp, Param, TgpValue, StaticString, as_static, DATA_PARAM, NOP, ExtendCtx, SomeVarsDef, Profile, CompsTrait };
+use crate::core::comp::{COMPS, Comp, Param, as_static, DATA_PARAM, NOP };
+use super::tgp::{TgpValue, StaticString, ExtendCtx, SomeVarsDef, Profile };
 
 pub type Data = Rc<RTValue>;
 pub type Vars = Rc<StdHashMap<StaticString, RTValue>>;
@@ -158,12 +159,12 @@ pub fn jb_run(ctx: Ctx) -> RTValue {
         TgpValue::Boolean(b) => RTValue::Boolean(*b),
         TgpValue::Array(_) => panic!("as Is"),
         TgpValue::Obj(_) => panic!("as Is"),
-        TgpValue::RustImpl(profile) => profile.run(&ctx),
+        TgpValue::RustImpl(profile) => panic!("RustImpl {:?}", profile),
         TgpValue::Profile(profile) => run_profile(profile, &ctx),
         TgpValue::ProfileExtendsCtx(profile, extend_ctx) => run_profile(profile, &ctx.extend(extend_ctx)),
         TgpValue::Nop() => (*ctx.data).clone(),
         TgpValue::Err(s) => panic!("{}",s),
-        TgpValue::ProfileByValue(pt,vec) => panic!("ProfileByValue {} {:?}",pt,vec),
+        TgpValue::UnresolvedProfile(pt,vec) => panic!("UnresolvedProfile {} {:?}",pt,vec),
         TgpValue::Iden(s) => panic!("Iden {}",s),
         TgpValue::JsFunc(s) => panic!("JsFunc {}",s),
     }

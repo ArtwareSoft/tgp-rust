@@ -6,9 +6,9 @@
             "request": "launch",
             "name": "Debug Rust Project",
             "cargo": {
-                "args": ["build", "--bin", "tgp_rust"],  // Ensure the binary is explicitly specified
+                "args": ["build", "--bin", "test"],  // Ensure the binary is explicitly specified
                 "filter": {
-                    "name": "tgp_rust",
+                    "name": "test",
                     "kind": "bin"
                 }
             },

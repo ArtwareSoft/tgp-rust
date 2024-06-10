@@ -5,7 +5,7 @@ use proc_macro2::{TokenStream, TokenTree};
 use proc_macro2::Delimiter::{Brace, Bracket, Parenthesis};
 use syn::spanned::Spanned;
 use syn::{Result, Error};
-use quote::{quote, ToTokens};
+use quote::{format_ident, quote};
 
 pub fn tgp_val_from_string(body: &str) -> Result<TokenStream> {
     let mut fixed = String::new();
@@ -30,7 +30,35 @@ pub fn tgp_val_from_string(body: &str) -> Result<TokenStream> {
 }
 
 pub fn comp(body: TokenStream) -> Result<TokenStream> {
-    tgp_val(quote!{component(#body)})
+    let span = body.span();
+    let mut iter = body.into_iter();
+    let ident = match iter.next() {
+        Some(TokenTree::Ident(iden)) => iden,
+        _ => return Err(Error::new(span, "expecting comp name"))
+    };
+    let cmp = match iter.next() {
+        Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => tgp_val(iter.collect()),
+        Some(tt) => Err(Error::new(tt.span(), "expecting , 2")),
+        None => Err(Error::new(ident.span(), "expecting , 3"))
+    }?;
+    let fn_name = format_ident!("{}_init", ident);
+    let res = quote! { 
+        #[ctor]
+        #[allow(non_snake_case)]
+        fn #fn_name() {
+            COMPS.add(module_path!(), stringify!(#ident), #cmp) 
+        }
+    };
+    println!("comp {}",res.to_string());
+    Ok(res)
+}
+
+pub fn dsl(dsl: TokenStream) -> Result<TokenStream> {
+    let span = dsl.span();
+    match dsl.into_iter().next() {
+        Some(TokenTree::Ident(iden)) => Ok(quote! {{DSLs.add(module_path!(), stringify!(#iden)) }}),
+        _ => Err(Error::new(span, "expecting dsl"))
+    }
 }
 
 pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
@@ -38,7 +66,7 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
     let mut iter = body.into_iter();
     let tt = match iter.next() {
         Some(tt) => tt,
-        None => return Err(Error::new(span, "expecting tgp value"))
+        None => return Err(Error::new(span, "expecting tgp value 1"))
     };
     match tt {
         TokenTree::Literal(_) => literal_value(&tt),
@@ -47,24 +75,31 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
             Some(TokenTree::Group(g)) => match g.delimiter() {
                 Brace => build_profile(&pt.to_string() ,g.stream()),
                 Parenthesis => build_profile_by_value(&pt.to_string() ,g.stream()),
-                Bracket => return Err(Error::new(g.span(), "expecting profile body")),
-                proc_macro2::Delimiter::None => return Err(Error::new(g.span(), "expecting profile body")),
+                Bracket => return Err(Error::new(g.span(), "expecting profile body 1 ")),
+                proc_macro2::Delimiter::None => return Err(Error::new(g.span(), "expecting profile body 2")),
             },
-            Some(TokenTree::Literal(l)) => return Err(Error::new(l.span(), "expecting profile body. use (")),
-            Some(TokenTree::Ident(i)) => if pt.to_string() == "fn" {
-                    let body: TokenStream = iter.collect();
-                    return Ok(quote! {{
-                        #[derive(Debug)]
-                        struct tmp;
-                        impl RustImpl for tmp {
-                            fn run #body
+            Some(TokenTree::Literal(l)) => return Err(Error::new(l.span(), "expecting profile body 3. use (")),
+            Some(TokenTree::Punct(p)) if p.as_char() == '<' => {
+                match pt.to_string().as_str() {
+                    "fn" => {
+                        let type_iden = match iter.next() {
+                            Some(TokenTree::Ident(type_iden)) => type_iden,
+                            _ => return Err(Error::new(p.span(), "expecting type identifier"))
+                        };
+                        match iter.next() {
+                            Some(TokenTree::Punct(p)) if p.as_char() == '>' => {},
+                            _ => return Err(Error::new(p.span(), "expecting >"))
                         }
-                        TgpValue::RustImpl(Arc::new(tmp)) 
-                    }})
-                } else {
-                    return Err(Error::new(i.span(), "expecting profile body. use ("))
+        
+                        let body: TokenStream = iter.collect();
+                        return Ok(quote! {{
+                            TgpValue::RustImpl(Arc::new(Arc::new(#body) as FuncType<#type_iden>))
+                        }})        
+                    }
+                    _ => return Err(Error::new(p.span(), "expecting fn before <"))
+                }
             },
-            Some(TokenTree::Punct(p)) => return Err(Error::new(p.span(), "expecting profile body. use (")),
+            _ => return Err(Error::new(pt.span(), "expecting profile body 5. use (")),
         },
         TokenTree::Group(g) => match g.delimiter() {
             Brace => build_profile("$obj" ,g.stream()),
@@ -72,7 +107,13 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
             Bracket => tgp_array(g.stream()),
             proc_macro2::Delimiter::None => return Err(Error::new(g.span(), "expecting array [")),
         }
-        TokenTree::Punct(p) => return Err(Error::new(p.span(), "expecting tgp value"))
+        TokenTree::Punct(p) if p.as_char() == '|' => {
+            let body: TokenStream = iter.collect();
+            return Ok(quote! {{
+                TgpValue::RustImpl(Arc::new(| #body))
+            }})
+        }
+        TokenTree::Punct(p) => return Err(Error::new(p.span(), "expecting tgp value 2"))
     }
 }
 
@@ -156,7 +197,7 @@ fn build_profile_by_value(pt: &str, body: TokenStream) -> Result<TokenStream> {
         {
             let mut vec: Vec<TgpValue> = Vec::new();
             #(#vec_items)*
-            TgpValue::ProfileByValue(#pt,vec)
+            TgpValue::UnresolvedProfile(#pt,vec)
         }
     };
     println!("profile_by_value {}",res.to_string());
