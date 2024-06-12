@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-use crate::core::tgp::{TgpValue,StdHashMap,StaticString,Profile,TgpType,FuncType};
+use crate::core::tgp::{TgpValue,StdHashMap,StaticString,Profile,TgpType,FuncType,Ctx};
 use std::collections::HashSet;
 
 use std::sync::Arc;
@@ -54,7 +54,10 @@ impl Comps {
         let r#type = comp.prop_as_str("type").map_or("data<>", |t| as_static(&format!("{}<{}>", t, dsl)));
         let id = as_static(&format!("{}{}", r#type, short_id));
         let params = comp.prop("params").map_or(vec!{}, |params| match params {
-            TgpValue::Array(params) => params.into_iter().map(|param| ParamType::from_tgp_value_with_dsl(param,dsl)).collect(),
+            TgpValue::Array(params) => params.iter().map(|param| {
+                let p : &Param = Box::leak(Box::<Param>::from(ParamType::from_ctx_with_dsl(param,dsl)));
+                p
+            }).collect(),
             _ => vec!{}
         });
         let impl1 = comp.prop("impl").map_or(TgpValue::Nop(), |imp| self.resolve_profile(imp.clone(), &Param::simple("",r#type, None), comp));
@@ -84,7 +87,7 @@ impl Comps {
                                 props.insert(p2, TgpValue::Array((&args_by_value[1..]).into()));
                             },
                             _ => {
-                                props = args_by_value.into_iter().zip(comp.params.clone().into_iter().map(|p| p.id)).map(|(v,id)| (id,v.clone()))
+                                props = args_by_value.iter().zip(comp.params.iter().map(|p| p.id)).map(|(v,id)| (id,v.clone()))
                                     .collect();
                             },                            
                         };
@@ -125,7 +128,7 @@ pub struct Comp {
     pub id: StaticString,
     pub module: StaticString,
     pub r#type: StaticString,
-    pub params: Vec<Param>,
+    pub params: Vec<&'static Param>,
     pub r#impl: &'static TgpValue,
     pub src: &'static TgpValue,
 }
@@ -187,12 +190,12 @@ impl Param {
 struct ParamType;
 impl TgpType for ParamType {
     type ResType = Param;
-    fn from_tgp_value(_profile: &'static TgpValue) -> Self::ResType { panic!("should be initialized with dsl") }
+    fn from_ctx(_ctx: &Ctx) -> Self::ResType { panic!("should be initialized with dsl") }
     fn default_value() -> Param { panic!("no default value for param") }
 }
 
 impl ParamType {
-    fn from_tgp_value_with_dsl(profile: &'static TgpValue, dsl: StaticString) -> Param {
+    fn from_ctx_with_dsl(profile: &'static TgpValue, dsl: StaticString) -> Param {
         match profile {
             TgpValue::Iden(id) => Param::simple(id, "data<>", None),
             TgpValue::String(id) => Param::simple(id, "data<>", None),
@@ -209,8 +212,8 @@ impl ParamType {
 pub struct StaticStringType;
 impl TgpType for StaticStringType {
     type ResType = StaticString;
-    fn from_tgp_value(profile: &'static TgpValue) -> Self::ResType {
-        match profile {
+    fn from_ctx(ctx: &Ctx) -> Self::ResType {
+        match ctx.profile {
             TgpValue::Iden(id) => id,
             TgpValue::String(id) => id,
             _ => panic!("invalid StaticStringType")
@@ -224,8 +227,8 @@ comp!(param, {
     params: [
         id, "type", "defaultValue" // can not be UnresolvedProfile to avoid endless recustion
     ],
-    impl: fn<ParamType> |profile: &'static Profile| { 
-        panic!("param should be solved as unresolved: {:?}", profile);
-        Param::simple(profile.prop::<StaticStringType>("id"), profile.prop::<StaticStringType>("type"), None)
+    impl: fn<ParamType> |ctx: &Ctx| { 
+        panic!("param should be solved as unresolved: {:?}", ctx);
+        Param::simple("id", "type", None)
     }
 });

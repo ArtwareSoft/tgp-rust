@@ -1,5 +1,5 @@
 use tgp::core::comp::{COMPS, Comp, Param, as_static, DATA_PARAM, NOP };
-use tgp::core::tgp::{TgpValue, StaticString, ExtendCtx, SomeVarsDef, Profile, TgpType };
+use tgp::core::tgp::{Ctx, ExtendCtx, Profile, SomeVarsDef, StaticString, TgpType, TgpValue };
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,7 +35,7 @@ fn main() {
 }
 
 fn test_calculator() {
-    let res = Exp::from_tgp_value(COMPS.get_impl("Exp<>plus_test").unwrap());
+    let res = Exp::from_ctx(&Ctx::new(COMPS.get_impl("Exp<>plus_test").unwrap()));
     println!("plus: {}",res);
 }
 
