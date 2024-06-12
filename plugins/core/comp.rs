@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-use crate::core::tgp::{TgpValue,StdHashMap,StaticString,Profile,TgpType};
+use crate::core::tgp::{TgpValue,StdHashMap,StaticString,Profile,TgpType,FuncType};
 use std::collections::HashSet;
 
 use std::sync::Arc;
@@ -206,9 +206,6 @@ impl ParamType {
     }
 }
 
-pub type ParamFuncType = Arc<dyn Fn(&'static Profile) -> Param + Sync + Send>;
-
-
 pub struct StaticStringType;
 impl TgpType for StaticStringType {
     type ResType = StaticString;
@@ -227,7 +224,8 @@ comp!(param, {
     params: [
         id, "type", "defaultValue" // can not be UnresolvedProfile to avoid endless recustion
     ],
-    impl: |profile: &'static Profile| -> Param { panic!("param should be solved as unresolved: {:?}", profile) }
-    //     Param::simple(profile.prop::<StaticStringType>("id"), profile.prop::<StaticStringType>("type"), None)
-    // }
+    impl: fn<ParamType> |profile: &'static Profile| { 
+        panic!("param should be solved as unresolved: {:?}", profile);
+        Param::simple(profile.prop::<StaticStringType>("id"), profile.prop::<StaticStringType>("type"), None)
+    }
 });

@@ -61,6 +61,99 @@ pub fn dsl(dsl: TokenStream) -> Result<TokenStream> {
     }
 }
 
+fn tgp_function(func: TokenStream) -> Result<TokenStream> {
+    let span = func.span();
+    let mut iter = func.into_iter();
+    match iter.next() {
+        Some(TokenTree::Punct(p)) if p.to_string() == "<" => match iter.next() {
+            Some(TokenTree::Ident(res_type)) => { // fn<Exp> |profile: &'static Profile| { ...
+                match iter.next() {
+                    Some(TokenTree::Punct(p)) if p.as_char() == '>' => {},
+                    _ => return Err(Error::new(res_type.span(), "expecting >"))
+                }
+            
+                let body: TokenStream = iter.collect();
+                return Ok(quote! {{
+                    TgpValue::RustImpl(Arc::new(Arc::new(#body) as FuncType<#res_type>))
+                }})        
+            },
+            _ => return Err(Error::new(p.span(), "expecting <TYPE>"))
+        }
+        Some(TokenTree::Group(g)) if g.delimiter() == Parenthesis => { // fn (x: Fn Exp, y: Exp) -> Exp { x() + y },
+        // => |profile: &'static Profile| {
+        //    match (profile.prop::<Exp>("x"), profile.prop::<Exp>("y")) {
+        //        (x, y) => { x + y }
+        //    }
+        // }
+            let params_in_match_exp = join_token_streams_with_comma(split_token_stream(g.stream(), ',')
+                .map(|x| param_to_match_exp(x).unwrap()).collect());
+            let param_names = join_token_streams_with_comma(split_token_stream(g.stream(), ',')
+                .map(|x| param_name(x).unwrap()).collect());
+
+            let arrow = match iter.next() {
+                Some(TokenTree::Punct(p)) if p.as_char() == '-' => match iter.next() {
+                    Some(TokenTree::Punct(p)) if p.as_char() == '>' => {p},
+                    _ => return Err(Error::new(p.span(), "expecting >"))
+                },
+                _ => return Err(Error::new(g.span(), "expecting -> at the end"))
+            };
+            let res_type = match iter.next() {
+                Some(TokenTree::Ident(res_type)) => res_type,
+                _ => return Err(Error::new(arrow.span(), "expecting result type"))
+            };
+            let body: TokenStream = iter.collect();
+            return Ok(quote! {{
+                TgpValue::RustImpl(Arc::new(Arc::new(
+                    |profile: &'static Profile| {
+                        match (#params_in_match_exp) {
+                            (#param_names) => #body
+                        }
+                    }) as FuncType<#res_type>))
+            }})
+        },
+        _ => return Err(Error::new(span, "expecting function def:  fn(x: Exp, y: fn Exp) | fn<T> |profile: &'static Profile|"))
+    }
+
+    fn join_token_streams_with_comma(streams: Vec<TokenStream>) -> TokenStream {
+        let mut iter = streams.into_iter();
+        if let Some(first) = iter.next() {
+            iter.fold(first, |acc, ts| quote! { #acc , #ts })
+        } else {
+            TokenStream::new()
+        }
+    }
+    
+    fn param_name(param: TokenStream) -> Result<TokenStream> {
+        let span = param.span();
+        let mut iter = param.into_iter();
+        match iter.next() {
+            Some(TokenTree::Ident(param)) => Ok(quote!{#param}),
+            _ => return Err(Error::new(span, "expecting param identifier"))
+        }
+    }    
+
+    fn param_to_match_exp(param: TokenStream) -> Result<TokenStream> {
+        let span = param.span();
+        let mut iter = param.into_iter();
+        let iden = match iter.next() {
+            Some(TokenTree::Ident(param)) => param,
+            _ => return Err(Error::new(span, "expecting param identifier"))
+        };
+        let colon = match iter.next() {
+            Some(TokenTree::Punct(p)) if p.as_char() == ':' => { p },
+            _ => return Err(Error::new(iden.span(), "expecting :"))
+        };
+        match iter.next() {
+            Some(TokenTree::Ident(t)) if t.to_string() == "fn" => match iter.next() {
+                Some(TokenTree::Ident(t)) => { Ok(quote! {profile.func::<#t>(stringify!(#iden)) }) },
+                _ => return Err(Error::new(t.span(), "expecting param type identifier"))
+            },
+            Some(TokenTree::Ident(t)) => { Ok(quote! {profile.prop::<#t>(stringify!(#iden)) }) },
+            _ => return Err(Error::new(colon.span(), "expecting param type identifier"))
+        }
+    }    
+}
+
 pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
     let span = body.span();
     let mut iter = body.into_iter();
@@ -70,6 +163,7 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
     };
     match tt {
         TokenTree::Literal(_) => literal_value(&tt),
+        TokenTree::Ident(func) if func.to_string() == "fn" => tgp_function(iter.collect()),
         TokenTree::Ident(pt) => match iter.next() {
             None => return Ok(quote! {TgpValue::Iden(stringify!(#pt)) }),
             Some(TokenTree::Group(g)) => match g.delimiter() {
@@ -79,26 +173,26 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
                 proc_macro2::Delimiter::None => return Err(Error::new(g.span(), "expecting profile body 2")),
             },
             Some(TokenTree::Literal(l)) => return Err(Error::new(l.span(), "expecting profile body 3. use (")),
-            Some(TokenTree::Punct(p)) if p.as_char() == '<' => {
-                match pt.to_string().as_str() {
-                    "fn" => {
-                        let type_iden = match iter.next() {
-                            Some(TokenTree::Ident(type_iden)) => type_iden,
-                            _ => return Err(Error::new(p.span(), "expecting type identifier"))
-                        };
-                        match iter.next() {
-                            Some(TokenTree::Punct(p)) if p.as_char() == '>' => {},
-                            _ => return Err(Error::new(p.span(), "expecting >"))
-                        }
+            // Some(TokenTree::Punct(p)) if p.as_char() == '<' => {
+            //     match pt.to_string().as_str() {
+            //     "fn" => {
+            //         let type_iden = match iter.next() {
+            //         Some(TokenTree::Ident(type_iden)) => type_iden,
+            //     _ => return Err(Error::new(p.span(), "expecting type identifier"))
+            // };
+            // match iter.next() {
+            //     Some(TokenTree::Punct(p)) if p.as_char() == '>' => {},
+            //     _ => return Err(Error::new(p.span(), "expecting >"))
+            // }
         
-                        let body: TokenStream = iter.collect();
-                        return Ok(quote! {{
-                            TgpValue::RustImpl(Arc::new(Arc::new(#body) as FuncType<#type_iden>))
-                        }})        
-                    }
-                    _ => return Err(Error::new(p.span(), "expecting fn before <"))
-                }
-            },
+            // let body: TokenStream = iter.collect();
+            // return Ok(quote! {{
+            // TgpValue::RustImpl(Arc::new(Arc::new(#body) as FuncType<#type_iden>))
+            // }})        
+            // }
+            //         _ => return Err(Error::new(p.span(), "expecting fn before <"))
+            // }
+            // },
             _ => return Err(Error::new(pt.span(), "expecting profile body 5. use (")),
         },
         TokenTree::Group(g) => match g.delimiter() {
@@ -107,12 +201,12 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
             Bracket => tgp_array(g.stream()),
             proc_macro2::Delimiter::None => return Err(Error::new(g.span(), "expecting array [")),
         }
-        TokenTree::Punct(p) if p.as_char() == '|' => {
-            let body: TokenStream = iter.collect();
-            return Ok(quote! {{
-                TgpValue::RustImpl(Arc::new(| #body))
-            }})
-        }
+        // TokenTree::Punct(p) if p.as_char() == '|' => {
+        // let body: TokenStream = iter.collect();
+        // return Ok(quote! {{
+        // TgpValue::RustImpl(Arc::new(| #body))
+        // }})
+        // }
         TokenTree::Punct(p) => return Err(Error::new(p.span(), "expecting tgp value 2"))
     }
 }

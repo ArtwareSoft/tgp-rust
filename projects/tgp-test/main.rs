@@ -1,5 +1,4 @@
-use tgp::core::rt::{Ctx, RTValue }; 
-use tgp::core::comp::{COMPS, Comp, Param, as_static, DATA_PARAM, NOP, ParamFuncType };
+use tgp::core::comp::{COMPS, Comp, Param, as_static, DATA_PARAM, NOP };
 use tgp::core::tgp::{TgpValue, StaticString, ExtendCtx, SomeVarsDef, Profile, TgpType };
 use std::any::Any;
 use std::collections::HashMap;
@@ -8,16 +7,6 @@ use tgp::examples::calculator::Exp;
 
 use ctor::ctor;
 use tgp_macro::{tgp_value,tgp_value_from_string,comp};
-use lazy_static::lazy_static;
-
-// fn main() {
-// //    let args: Vec<String> = env::args().collect();
-
-// //    println!("Number of arguments: {}", args.len());
-// //    println!("Arguments: {:?}", args);
-
-//     // Rest of your code...
-// }
 
 fn main() {
     // println!("start resolving");
@@ -65,52 +54,3 @@ fn test_calculator() {
 //     //println!("{:#?}", Ctx::new().set_profile(TgpValue::parse_json(json_text2)).run_itself());
 // }
 
-#[ctor]
-fn init1() {
-    //literal_value!(dsfsdf);
-    //println!("{}", "Hello");
-}
-
-// comp!(a, {
-//     params: [ 
-//         Param(aa, { type: "hello[]", defaultValue: myProf(aa,3)}),
-//     ],
-//     impl: () => {}
-// });
-
-#[ctor]
-fn init2() {
-//  println!("{:?}", tgp_value!(a(5, {a : a, b: 3})));
-//  println!("{:?}", tgp_value!(a(5, {a : a, b: 3})));
-
-//     println!("{:?}", tgp_value!(jbComp {
-//         id: "pipe",  elems: [3],
-//     }
-// ));
-    // println!("{:?}", tgp_value_from_string!(r#"component(a, {
-    //     params: [ { id: 'aa'}],
-    //     impl: 5
-    // })"#));
-    // println!("{:?}", comp!(a, {
-    //     type: "myType<myDsl>[]",
-    //     params: [ 
-    //         param(aa, {type: array(hello), defaultValue: myProf("aa",3)}),
-    //         { id: vv, type: "hello[]", defaultValue: myProf("aa",3)},
-    //     ],
-    //     impl: fn run(&self, ctx: &Ctx) -> RTValue { RTValue::Int(5) }
-    // }));
-    // println!("{:?}", tgp_value_from_string!(r#"component('a', {
-    //     impl: dataTest(pipeline(Var('a', 1), list('%$a%',2), join()), equals('1,2'))
-    //   })"#));
-    //println!("{:?}", tgp_value! ( dataTest { calc: 5, expectedResult: equals {to : 5 }} ));
-}
-
-// component!( pipeTest, { 
-//     type: "data",
-//     impl: pipe {source: "a,b,c", operator: [split(","), toUpperCase()]}
-// });
-
-// #[ctor]
-// fn init() {
-//     print!("{}", to_tgp_value! ( dataTest { calc: 5, expectedResult: equals {to : 5 }} ));
-// }

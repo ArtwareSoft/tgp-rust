@@ -12,24 +12,24 @@ pub trait DataFlow {
 }
 
 comp!(pipe, {
-        type: data,
-        params: [
-            param(source),
-            param(operator),
-        ],
-        impl: trait DataFlow { fn calc(ctx: &Ctx) -> RTValue {
-            let source = ctx.calc_dynamic_param("source", None, None);
-            match source {
-                Some(val) => ctx.get_param("operator").unwrap().into_iter().fold(val, |agg, _oper| {
-                    let operator_func = match _oper { RTValue::Func(ctx) => ctx, _ => panic!("pipe: invalid operator param")};
-                    match agg {
-                        RTValue::Shared(rc_data) => operator_func.set_data(rc_data).run_itself(),
-                        _ => operator_func.set_data(Rc::new(agg)).run_itself()
-                    }
-                }),    
-                None => RTValue::Error("Pipe: Missing No source param".to_string(), Some(ctx.clone()))
-            }
-        } }
+    type: data,
+    params: [
+        param(source),
+        param(operator),
+    ],
+    impl: trait DataFlow { fn calc(ctx: &Ctx) -> RTValue {
+        let source = ctx.calc_dynamic_param("source", None, None);
+        match source {
+            Some(val) => ctx.get_param("operator").unwrap().into_iter().fold(val, |agg, _oper| {
+                let operator_func = match _oper { RTValue::Func(ctx) => ctx, _ => panic!("pipe: invalid operator param")};
+                match agg {
+                    RTValue::Shared(rc_data) => operator_func.set_data(rc_data).run_itself(),
+                    _ => operator_func.set_data(Rc::new(agg)).run_itself()
+                }
+            }),    
+            None => RTValue::Error("Pipe: Missing No source param".to_string(), Some(ctx.clone()))
+        }
+    } }
 });
 
 comp!(split, {

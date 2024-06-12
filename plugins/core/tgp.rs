@@ -40,6 +40,12 @@ impl Profile {
     pub const fn new(pt: StaticString, props: StdHashMap<StaticString, TgpValue>) -> TgpValue { 
         TgpValue::Profile(Profile {pt, props})
     }
+    pub fn func<T: TgpType>(&'static self, prop: StaticString) -> DynmaicProfile<T> {
+        Arc::new(|| { match self.props.get(prop) {
+            Some(v) => T::from_tgp_value(v),
+            None => T::default_value()
+        }}) as DynmaicProfile<T>
+    }
     pub fn prop<T: TgpType>(&'static self, prop: StaticString) -> T::ResType {
         match self.props.get(prop) {
             Some(v) => T::from_tgp_value(v),
@@ -101,6 +107,7 @@ impl Default for TgpValue {
 // }
 
 pub type FuncType<T> = Arc<dyn Fn(&'static Profile) -> <T as TgpType>::ResType + Sync + Send>;
+pub type DynmaicProfile<T> = Arc<dyn Fn() -> <T as TgpType>::ResType + Sync + Send>;
 
 pub trait TgpType: Any + Send + Sync {
     type ResType;

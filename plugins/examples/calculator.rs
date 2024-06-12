@@ -1,10 +1,8 @@
-use crate::core::comp::{COMPS, Param, as_static, DATA_PARAM, NOP };
-use crate::core::tgp::{ExtendCtx, Profile, SomeVarsDef, StaticString, TgpType, TgpValue, FuncType };
+use crate::core::comp::{COMPS};
+use crate::core::tgp::{Profile, StaticString, TgpType, TgpValue, FuncType };
 
-use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tgp_macro::{tgp_value, comp};
+use tgp_macro::{comp};
 use ctor::ctor;
 
 
@@ -28,21 +26,7 @@ comp!(plus, {
         param(x, Exp), 
         param(y, Exp) 
     ],
-    /*
-    impl: (x: FuncType<Exp>, y: Exp) {
-        x() + y
-    },
-    => impl2: |profile: &'static Profile| {
-        match (profile.prop::<Exp>("x"), profile.prop::<Exp>("y")) {
-            (x, y) => {
-                x + y
-            }
-        }
-    },
-*/
-    impl: fn <Exp> |profile: &'static Profile| {
-        profile.prop::<Exp>("x") + profile.prop::<Exp>("y")
-    }
+    impl: fn (x: fn Exp, y: Exp) -> Exp { x() + y },
 });
 
 comp!(plus_test, {
@@ -50,19 +34,25 @@ comp!(plus_test, {
     impl: plus(1,2)
 });
 
-// #[ctor]
-// fn test2() {
-//     let res  = Exp::from_tgp_value(COMPS.get_impl("plus_test").unwrap());
-//     println!("plus: {}",res);
-// }
 
-comp!(commonTest_join, {
-  impl: dataTest(pipeline(list(1,2), "%%", join()), equals("1,2"))
-});
+#[ctor]
+fn init() {
+    let x = TgpValue::RustImpl(Arc::new(Arc::new(| profile : & 'static Profile | {
+        match( profile.prop::<Exp>("x"), profile.prop::< Exp >("y")) 
+        { 
+            (x, y) => { x + y } 
+        }
+    }
+    ) as FuncType < Exp >));
+}
+
+// comp!(commonTest_join, {
+//   impl: dataTest(pipeline(list(1,2), "%%", join()), equals("1,2"))
+// });
 
 /*
 todo:
-1. make plus work with lambda impl
-2. make plus work with (x: FuncType<Exp>, y: Exp)
-3. build test pt
+1. build data flow dsl
+2. add ctx to interface - use ctx versus create new ctx.
+3. build interpreter with ctx
 */
