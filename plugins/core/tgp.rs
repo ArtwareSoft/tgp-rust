@@ -5,7 +5,7 @@ use std::any::Any;
 use std::clone::Clone;
 extern crate paste;
 
-use crate::core::comp::{as_static, COMPS, Param};
+use crate::core::comp::{as_static, COMPS, Comp, Param};
 
 pub type StaticString = &'static str;
 
@@ -110,59 +110,71 @@ impl Default for TgpValue {
     fn default() -> Self { TgpValue::Nop() }
 }
 
-pub type FuncType<T> = Arc<dyn Fn(&Ctx) -> <T as TgpType>::ResType + Sync + Send>;
+pub type FuncType<T> = Arc<dyn Fn(&Arc<Ctx>) -> <T as TgpType>::ResType + Sync + Send>;
 //pub type DynmaicProfile<T> = Arc<dyn Fn() -> <T as TgpType>::ResType + Sync + Send>;
 
 pub trait TgpType: Any + Send + Sync {
     type ResType;
     fn default_value() -> Self::ResType;
-    fn from_ctx(ctx: &Ctx) -> Self::ResType;
+    fn from_ctx(ctx: &Arc<Ctx>) -> Self::ResType;
 }
 
 #[derive(Clone, Debug)]
 pub struct Ctx {
-    pub profile: &'static TgpValue,
-    pub parent_param: Option<&'static Param>,
     pub path: StaticString,
+    pub profile: &'static TgpValue,
+    pub comp: Option<&'static Comp>,
+    pub parent_param: Option<&'static Param>,
 //    pub vars: Vars,
-    pub cmp_ctx: Option<Arc<Ctx>>,
+    pub caller_ctx: Option<Arc<Ctx>>,
 }
 
 impl Ctx {
-    pub fn new(profile: &'static TgpValue) -> Self { Ctx {profile, parent_param: None, path: "", cmp_ctx: None } }
-    pub fn run<T: TgpType>(&self) -> T::ResType {        
+    pub fn new(profile: &'static TgpValue) -> Arc<Ctx> { Arc::new( Ctx {profile, parent_param: None, path: "unknown", comp: None, caller_ctx: None } )}
+    pub fn new_comp(self: &Arc<Ctx>, comp: &'static Comp) -> Arc<Ctx> { Arc::new(
+        Ctx { comp: Some(comp),
+        profile: comp.r#impl, parent_param: self.parent_param, 
+        path: as_static(&format!("{}~impl",comp.id)),
+        caller_ctx: Some(Arc::clone(self))
+    }) }
+    pub fn run<T: TgpType>(self: &Arc<Ctx>) -> T::ResType {
+        println!("run ctx {}", self.path);
         match self.profile {
             TgpValue::Profile(prof) => {
                 let pt = prof.pt;
                 match COMPS.get(pt) {
-                    Some(comp) => match comp.r#impl {
-                        TgpValue::RustImpl(ref any_arc) => {
-                            match any_arc.downcast_ref::<FuncType<T>>() {
-                                Some(f) => f(self),
-                                None => panic!("can not cast impl 1 {}", pt),
-                            }
-                        }
-                        _ => panic!("can not cast impl 2 {}", pt)
-                    },
+                    Some(comp) => self.new_comp(comp).run::<T>(),
                     None => panic!("can not find pt {}", pt)
                 }                
             },
-            _ => { panic!("ctx.prop expecting profile as tgpValue {:?}", self)}
+            TgpValue::RustImpl(ref any_arc) => {
+                match any_arc.downcast_ref::<FuncType<T>>() {
+                    Some(f) => f(self),
+                    None => panic!("can not cast impl func {:?}", self),
+                }
+            },            
+            _ => { panic!("ctx.run expecting profile as tgpValue {:?}", self)}
         }
     }
-    pub fn prop<T: TgpType>(&self, prop: StaticString) -> T::ResType {
-        match self.profile {
+    pub fn prop<T: TgpType>(self: &Arc<Ctx>, prop: StaticString) -> T::ResType {
+        let profile : &'static TgpValue = match self.caller_ctx.clone() {
+            Some(caller_ctx) => caller_ctx.profile,
+            _ => { panic!("ctx.prop '{}' no caller ctx {:?}", prop, self)}
+        };
+        match profile {
             TgpValue::Profile(prof) => T::from_ctx(&self.inner_profile(prof, prof.param_def(prop))),
-            _ => { panic!("ctx.prop expecting profile as tgpValue {:?}", self)}
+            _ => { panic!("ctx.prop '{}' expecting profile as tgpValue {:?}", prop, self)}
         }
     }
     // pub fn set_profile(&self, profile: &'static TgpValue) -> Self {
     //     Ctx { profile, parent_param: self.parent_param, path: self.path, cmp_ctx: self.cmp_ctx.as_ref().map(Rc::clone) }
     // }
-    pub fn profile_and_path(&self, profile: &'static TgpValue, parent_param: &'static Param, path: &str) -> Self {
-        Ctx { profile, path: as_static(path), parent_param: Some(parent_param), cmp_ctx: self.cmp_ctx.as_ref().map(Arc::clone) }
-    }
-    pub fn inner_profile(&self, profile: &'static Profile, parent_param: &'static Param) -> Self {
+    pub fn profile_and_path(self: &Arc<Ctx>, profile: &'static TgpValue, parent_param: &'static Param, path: &str) -> Arc<Ctx> { Arc::new(
+        Ctx { profile, path: as_static(path), parent_param: Some(parent_param), comp: self.comp, 
+            caller_ctx: match self.caller_ctx { Some(ref c) => Some(c.clone()), None => None }
+        }
+    )}
+    pub fn inner_profile(self: &Arc<Ctx>, profile: &'static Profile, parent_param: &'static Param) -> Arc<Ctx> {
         let param_id = parent_param.id;
         match profile.props.get(param_id) {
             Some(val) => self.profile_and_path(val, parent_param, &format!("{}~{param_id}", self.path)),
@@ -172,7 +184,7 @@ impl Ctx {
             }
         }        
     }
-    pub fn inner_profile_in_array(&self, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Option<Self> {
+    pub fn inner_profile_in_array(self: &Arc<Ctx>, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Option<Arc<Ctx>> {
         let param_id = parent_param.id;
         Some(self.profile_and_path(inner_profile, parent_param, &format!("{}~{param_id}~{index}", self.path)))
     }

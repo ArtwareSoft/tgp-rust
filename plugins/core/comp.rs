@@ -190,7 +190,7 @@ impl Param {
 struct ParamType;
 impl TgpType for ParamType {
     type ResType = Param;
-    fn from_ctx(_ctx: &Ctx) -> Self::ResType { panic!("should be initialized with dsl") }
+    fn from_ctx(_ctx: &Arc<Ctx>) -> Self::ResType { panic!("should be initialized with dsl") }
     fn default_value() -> Param { panic!("no default value for param") }
 }
 
@@ -212,7 +212,7 @@ impl ParamType {
 pub struct StaticStringType;
 impl TgpType for StaticStringType {
     type ResType = StaticString;
-    fn from_ctx(ctx: &Ctx) -> Self::ResType {
+    fn from_ctx(ctx: &Arc<Ctx>) -> Self::ResType {
         match ctx.profile {
             TgpValue::Iden(id) => id,
             TgpValue::String(id) => id,
@@ -227,7 +227,7 @@ comp!(param, {
     params: [
         id, "type", "defaultValue" // can not be UnresolvedProfile to avoid endless recustion
     ],
-    impl: fn<ParamType> |ctx: &Ctx| { 
+    impl: fn<ParamType> |ctx: &Arc<Ctx>| { 
         panic!("param should be solved as unresolved: {:?}", ctx);
         Param::simple("id", "type", None)
     }
