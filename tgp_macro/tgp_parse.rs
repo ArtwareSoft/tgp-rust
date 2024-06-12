@@ -145,7 +145,7 @@ fn tgp_function(func: TokenStream) -> Result<TokenStream> {
         };
         match iter.next() {
             Some(TokenTree::Ident(t)) if t.to_string() == "fn" => match iter.next() {
-                Some(TokenTree::Ident(t)) => { Ok(quote! {ctx.func::<#t>(stringify!(#iden)) }) },
+                Some(TokenTree::Ident(t)) => { Ok(quote! {ctx.clone().func::<#t>(stringify!(#iden)) }) },
                 _ => return Err(Error::new(t.span(), "expecting param type identifier"))
             },
             Some(TokenTree::Ident(t)) => { Ok(quote! {ctx.prop::<#t>(stringify!(#iden)) }) },

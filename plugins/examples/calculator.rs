@@ -26,7 +26,7 @@ comp!(plus, {
         param(x, Exp), 
         param(y, Exp) 
     ],
-    impl: fn (x: Exp, y: Exp) -> Exp { x + y },
+    impl: fn (x: fn Exp, y: Exp) -> Exp { x() + y },
 });
 
 comp!(mul2, {
@@ -65,7 +65,8 @@ fn init() {
 
 /*
 todo:
-1. build data flow dsl
-2. add ctx to interface - use ctx versus create new ctx.
-3. build interpreter with ctx
+add param usage (mul2)
+add profile array support
+build data flow dsl
+
 */
