@@ -35,7 +35,7 @@ fn main() {
 }
 
 fn test_calculator() {
-    let res = Exp::from_ctx(&Ctx::new(COMPS.get_impl("Exp<>plus_test").unwrap()));
+    let res = Exp::from_ctx(&Ctx::new(COMPS.get_impl("Exp<>mul2_test").unwrap()));
     println!("plus: {}",res);
 }
 

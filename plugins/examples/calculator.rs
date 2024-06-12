@@ -14,7 +14,8 @@ impl TgpType for Exp {
             TgpValue::Int(i) => (*i) as Self::ResType,
             TgpValue::Float(f) => (*f) as Self::ResType,
             TgpValue::Profile(_profile) => ctx.run::<Self>(),
-            _ => panic!("invalid exp {:?}", ctx)
+            TgpValue::Iden(_iden) => ctx.run::<Self>(),
+            _ => panic!("exp invalid expression {:?}", ctx.profile)
         }
     }
     fn default_value() -> Self::ResType { 0.0 }

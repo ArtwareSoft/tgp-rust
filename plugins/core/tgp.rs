@@ -144,30 +144,54 @@ impl Ctx {
         caller_ctx: Some(Arc::clone(self))
     }) }
     pub fn run<T: TgpType>(self: &Arc<Ctx>) -> T::ResType {
-        println!("run ctx {}", self.path);
+        let caller_profile : &'static TgpValue = match self.caller_ctx.clone() {
+            Some(caller_ctx) => caller_ctx.profile,
+            _ => &TgpValue::Nop()
+        };
+        println!("run ctx {} profile {:?} caller_profile {:?} ", self.path, self.profile, caller_profile);
         match self.profile {
             TgpValue::Profile(prof) => {
                 let pt = prof.pt;
                 match COMPS.get(pt) {
-                    Some(comp) => self.new_comp(comp).run::<T>(),
+                    Some(comp) => {
+                        match comp.r#impl {
+                            TgpValue::RustImpl(ref any_arc) => {
+                                match any_arc.downcast_ref::<FuncType<T>>() {
+                                    Some(f) => f(self),
+                                    None => panic!("can not cast impl func {:?}", self),
+                                }
+                            },
+                            _ => self.new_comp(comp).run::<T>()
+                        }
+                    },
                     None => panic!("can not find pt {}", pt)
                 }                
             },
-            TgpValue::RustImpl(ref any_arc) => {
-                match any_arc.downcast_ref::<FuncType<T>>() {
-                    Some(f) => f(self),
-                    None => panic!("can not cast impl func {:?}", self),
+            TgpValue::Iden(iden) => {
+                let profile : &'static TgpValue = match self.caller_ctx.clone() {
+                    Some(caller_ctx) => caller_ctx.profile,
+                    _ => panic!("no caller ctx {:?}", self)
+                };
+                match profile {
+                    TgpValue::Profile(prof) =>  {
+                        let param_id = as_static(&iden.to_string());
+                        match prof.props.get(param_id) {
+                            Some(tgp_val) => T::from_ctx(&self.profile_and_path(tgp_val, prof.param_def(param_id), self.path)),
+                            None => T::default_value()
+                        }
+                    },
+                    _ => panic!("caller_ctx.profile is not a profile {:?}", self),
                 }
-            },            
+            },           
             _ => { panic!("ctx.run expecting profile as tgpValue {:?}", self)}
         }
     }
     pub fn prop<T: TgpType>(self: &Arc<Ctx>, prop: StaticString) -> T::ResType {
-        let profile : &'static TgpValue = match self.caller_ctx.clone() {
-            Some(caller_ctx) => caller_ctx.profile,
-            _ => { panic!("ctx.prop '{}' no caller ctx {:?}", prop, self)}
-        };
-        match profile {
+        // let profile : &'static TgpValue = match self.caller_ctx.clone() {
+        //     Some(caller_ctx) => caller_ctx.profile,
+        //     _ => { panic!("ctx.prop '{}' no caller ctx {:?}", prop, self)}
+        // };
+        match self.profile {
             TgpValue::Profile(prof) => T::from_ctx(&self.inner_profile(prof, prof.param_def(prop))),
             _ => { panic!("ctx.prop '{}' expecting profile as tgpValue {:?}", prop, self)}
         }
