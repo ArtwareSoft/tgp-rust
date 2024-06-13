@@ -18,34 +18,54 @@ impl TgpType for Exp {
             _ => panic!("exp invalid expression {:?}", ctx.profile)
         }
     }
-    fn default_value() -> Self::ResType { 0.0 }
 }
 
-comp!(plus, {
+comp!(rawCode, {
     type: Exp,
     params: [ 
         param(x, Exp), 
         param(y, Exp) 
     ],
-    impl: fn (x: fn Exp, y: Exp) -> Exp { x() + y },
+    impl: TgpValue::RustImpl(Arc::new(Arc::new(| ctx : &Arc<Ctx> | {
+        match( ctx.prop::<Exp>("x"), ctx.prop::< Exp >("y")) 
+        { 
+            (x, y) => { x + y } 
+        }
+    }
+    ) as FuncType < Exp >)),
 });
 
-comp!(mul2, {
+// comp!(plus, {
+//     type: Exp,
+//     params: [ 
+//         param(x, Exp), 
+//         param(y, Exp) 
+//     ],
+//     impl: fn (x: fn Exp, y: Exp) -> Exp { x() + y },
+// });
+
+
+// comp!(ptByExample, {
+//     type: Exp,
+//     params: [ 
+//         param(x, Exp), 
+//     ],
+//     impl: plus(x,x),
+// });
+
+// comp!(plus_test, {
+//     type: Exp,
+//     impl: plus(1,2)
+// });
+
+comp!(rawCode_test, {
     type: Exp,
-    params: [ 
-        param(x, Exp), 
-    ],
-    impl: plus(x,x),
+    impl: rawCode(1,2)
 });
 
-comp!(plus_test, {
+comp!(ptByExample_test, {
     type: Exp,
-    impl: plus(1,2)
-});
-
-comp!(mul2_test, {
-    type: Exp,
-    impl: mul2(5)
+    impl: ptByExample(5)
 });
 
 
@@ -66,7 +86,6 @@ fn init() {
 
 /*
 todo:
-add param usage (mul2)
 add profile array support
 build data flow dsl
 

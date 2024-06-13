@@ -191,7 +191,6 @@ struct ParamType;
 impl TgpType for ParamType {
     type ResType = Param;
     fn from_ctx(_ctx: &Arc<Ctx>) -> Self::ResType { panic!("should be initialized with dsl") }
-    fn default_value() -> Param { panic!("no default value for param") }
 }
 
 impl ParamType {
@@ -219,7 +218,6 @@ impl TgpType for StaticStringType {
             _ => panic!("invalid StaticStringType")
         }
     }
-    fn default_value() -> StaticString { "" }
 }
 
 comp!(param, {

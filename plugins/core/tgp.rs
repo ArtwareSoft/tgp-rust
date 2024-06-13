@@ -57,7 +57,7 @@ impl Profile {
     pub fn prop<T: TgpType>(&'static self, prop: StaticString) -> T::ResType {
         match self.props.get(prop) {
             Some(v) => T::from_ctx(&Ctx::new(v)),
-            None => T::default_value()
+            None => panic!("missing value for prop {} in profile {:?}",prop,self)
         }
     }
     // pub fn calc<T: TgpType>(&'static self) -> T::ResType {        
@@ -121,7 +121,6 @@ pub type FuncTypeNoCtx<T> = Arc<dyn Fn() -> <T as TgpType>::ResType + Sync + Sen
 
 pub trait TgpType: Any + Send + Sync {
     type ResType;
-    fn default_value() -> Self::ResType;
     fn from_ctx(ctx: &Arc<Ctx>) -> Self::ResType;
 }
 
@@ -177,23 +176,19 @@ impl Ctx {
                         let param_id = as_static(&iden.to_string());
                         match prof.props.get(param_id) {
                             Some(tgp_val) => T::from_ctx(&self.profile_and_path(tgp_val, prof.param_def(param_id), self.path)),
-                            None => T::default_value()
+                            None => panic!("missing value for prop {} in profile {:?}",param_id,prof)
                         }
                     },
                     _ => panic!("caller_ctx.profile is not a profile {:?}", self),
                 }
             },           
-            _ => { panic!("ctx.run expecting profile as tgpValue {:?}", self)}
+            _ => panic!("ctx.run expecting profile as tgpValue {:?}", self)
         }
     }
     pub fn prop<T: TgpType>(self: &Arc<Ctx>, prop: StaticString) -> T::ResType {
-        // let profile : &'static TgpValue = match self.caller_ctx.clone() {
-        //     Some(caller_ctx) => caller_ctx.profile,
-        //     _ => { panic!("ctx.prop '{}' no caller ctx {:?}", prop, self)}
-        // };
         match self.profile {
             TgpValue::Profile(prof) => T::from_ctx(&self.inner_profile(prof, prof.param_def(prop))),
-            _ => { panic!("ctx.prop '{}' expecting profile as tgpValue {:?}", prop, self)}
+            _ => panic!("ctx.prop '{}' expecting profile as tgpValue {:?}", prop, self)
         }
     }
     pub fn func<T: TgpType>(self: Arc<Ctx>, prop: StaticString) -> FuncTypeNoCtx<T> {
