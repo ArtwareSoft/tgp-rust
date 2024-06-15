@@ -1,4 +1,5 @@
 use crate::core::comp::{COMPS};
+use crate::core::tester::{Test, TestResult};
 use crate::core::tgp::{Ctx, FuncType, Profile, StaticString, TgpType, TgpValue };
 
 use std::sync::Arc;
@@ -35,58 +36,53 @@ comp!(rawCode, {
     ) as FuncType < Exp >)),
 });
 
-// comp!(plus, {
-//     type: Exp,
-//     params: [ 
-//         param(x, Exp), 
-//         param(y, Exp) 
-//     ],
-//     impl: fn (x: fn Exp, y: Exp) -> Exp { x() + y },
-// });
+comp!(plus, {
+    type: Exp,
+    params: [ 
+        param(x, Exp), 
+        param(y, Exp) 
+    ],
+    impl: fn (x: fn Exp, y: Exp) -> Exp { x() + y },
+});
 
 
-// comp!(ptByExample, {
-//     type: Exp,
-//     params: [ 
-//         param(x, Exp), 
-//     ],
-//     impl: plus(x,x),
-// });
+comp!(ptByExample, {
+    type: Exp,
+    params: [ 
+        param(x, Exp), 
+    ],
+    impl: plus(x,x),
+});
 
-// comp!(plus_test, {
-//     type: Exp,
-//     impl: plus(1,2)
-// });
+comp!(expTest, {
+    type: Test,
+    params: [ 
+        param(exp, Exp), 
+        param(expectedResult, Exp),
+    ],    
+    impl: fn (exp: Exp, expectedResult: Exp) -> Test { TestResult { 
+        success: exp == expectedResult, 
+        test_id: ctx.comp.unwrap().id, 
+        failure_reason: if exp == expectedResult { None } else{ Some(format!("{} != {}", exp, expectedResult)) }
+    } }
+});
+
+comp!(plus_test, {
+    type: Test,
+    impl: expTest(plus(1,2), 3)
+});
 
 comp!(rawCode_test, {
-    type: Exp,
-    impl: rawCode(1,2)
+    type: Test,
+    impl: expTest(rawCode(1,2),3)
 });
 
 comp!(ptByExample_test, {
-    type: Exp,
-    impl: ptByExample(5)
+    type: Test,
+    impl: expTest(ptByExample(5),10)
 });
 
 
 #[ctor]
 fn init() {
-    let x = TgpValue::RustImpl(Arc::new(Arc::new(| ctx : &Arc<Ctx> | {
-        match( ctx.prop::<Exp>("x"), ctx.prop::< Exp >("y")) 
-        { 
-            (x, y) => { x + y } 
-        }
-    }
-    ) as FuncType < Exp >));
 }
-
-// comp!(commonTest_join, {
-//   impl: dataTest(pipeline(list(1,2), "%%", join()), equals("1,2"))
-// });
-
-/*
-todo:
-add profile array support
-build data flow dsl
-
-*/

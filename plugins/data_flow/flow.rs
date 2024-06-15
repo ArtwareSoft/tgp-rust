@@ -1,4 +1,5 @@
 use crate::core::comp::{COMPS};
+use crate::core::tester::{Test, TestResult};
 use crate::core::tgp::{Ctx, FuncType, Profile, StaticString, TgpType, TgpValue };
 
 use std::any::Any;
@@ -31,33 +32,55 @@ impl Val {
 
 #[derive(Clone, Debug)]
 pub struct FlowCtx {
-    pub data: Val,
+    pub data: Option<Val>,
     pub vars: DataObj,
 }
-
-// pub trait DataFuncTrait: Any + Send + Sync {
-//     fn calc(flow_ctx: &FlowCtx) -> Val;
-//     fn agg(flow_ctx: &FlowCtx) -> Val;
-// }
+impl FlowCtx {
+    fn new() -> FlowCtx { FlowCtx {data: None, vars: HashMap::new() } }
+}
 
 pub type FlowFuncType = Arc<dyn Fn(&FlowCtx) -> Val + Sync + Send>;
 
-#[derive(Clone, Debug)]
-enum DataFuncType {
-    Static = 0, Agg, Single
+pub struct DataFuncs {
+    calc: Option<FlowFuncType>,
+    agg: Option<FlowFuncType>
 }
 
 pub struct Data;
 impl TgpType for Data {
-    type ResType = FlowFuncType;
+    type ResType = DataFuncs;
     fn from_ctx(ctx: &Arc<Ctx>) -> Self::ResType {
         match ctx.profile {
             TgpValue::Profile(_profile) => ctx.run::<Self>(),
             TgpValue::Iden(_iden) => ctx.run::<Self>(),
-            _ => DataFuncImp::new(DataFuncType::Static, ctx.profile)
+            TgpValue::Int(n) => DataFuncs {
+                calc: Some(Arc::new( move|_: &FlowCtx| -> Val {Val::Int(*n)})),
+                agg: Some(Arc::new( move|_: &FlowCtx| -> Val {Val::IntArray(vec!(*n))})),
+            },
+            _ => panic!("can not cast profile to DataFunc {:?}", ctx.profile)
         }
     }
 }
+
+comp!(dataTest, {
+    type: Test,
+    params: [ 
+        param(calc, Data), 
+        param(expectedResult, Data),
+    ],    
+    impl: fn (calc: Data, expectedResult: Data) -> Test { 
+        let flow_ctx = FlowCtx::new();
+        match (calc.calc.unwrap()(&flow_ctx).Int(), expectedResult.calc.unwrap()(&flow_ctx).Int()) {
+            (res, expectedResult) => {
+                TestResult { 
+                    success: res == expectedResult, 
+                    test_id: ctx.comp.unwrap().id, 
+                    failure_reason: if res == expectedResult { None } else{ Some(format!("{} != {}", res, expectedResult)) }
+                }
+            }
+        }
+    }
+});
 
 comp!(plus, {
     type: Data,
@@ -65,82 +88,33 @@ comp!(plus, {
         param(x, Data), 
         param(y, Data) 
     ],
-    impl: fn (x: Data, y: Data) -> Data { 
-        let res : FlowFuncType = Arc::new( move |fCtx: &FlowCtx| { Val::Int(x(fCtx).as_int() + y(fCtx).as_int()) });
-        res
-    },
+    impl: TgpValue::RustImpl(Arc::new(Arc::new( move | ctx : &Arc<Ctx> | {
+        match( ctx.prop::<Data>("x").calc.unwrap(), ctx.prop::< Data >("y").calc.unwrap()) { 
+            (x, y) => {
+                DataFuncs {
+                    calc: Some(Arc::new( move|fCtx: &FlowCtx| -> Val { Val::Int(
+                        match (x(fCtx).Int(), y(fCtx).Int()) {
+                            (x, y) => { x + y } 
+                        }
+                    )})),
+                    agg: None,
+                }
+            }
+        }
+    }
+    ) as FuncType < Data >)),
 });
 
-comp!(plus2, {
-    type: Data,
-    params: [ 
-        param(x, Data), 
-        param(y, Data) 
-    ],
-    impl: flowFn (x: Data as Int, y: Data as Int) -> Int { x + y }
-});
 
+comp!(data_const_test, {
+    type: Test,
+    impl: dataTest(plus(1,2), 3)
+});
 
 #[ctor]
 fn init_flow() {
-    let x = TgpValue::RustImpl(Arc::new(Arc::new(| ctx : &Arc<Ctx> | {
-        match( ctx.prop::<Data>("x"), ctx.prop::< Data >("y")) 
-        { 
-            (x, y) => {
-                let res : FlowFuncType = Arc::new( move |fCtx: &FlowCtx| {
-                    let data_res = match (x(fCtx).Int(), y(fCtx).Int()) {
-                        (x, y) => { x + y } 
-                    };
-                    Val::Int(data_res)
-                });
-                res
-            }
-        }
-    }
-    ) as FuncType < Data >));
 }
 
-#[derive(Clone, Debug)]
-pub struct DataType;
-impl TgpType for DataType {
-    type ResType = Val;
-    fn from_ctx(ctx: &Arc<Ctx>) -> Self::ResType {
-        match ctx.profile {
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DtCtx {
-    pub expected_type: Val,
-    pub vars: DataObj,
-}
-
-struct DataFuncImpX {
-    t: DataFuncType,
-    profile: &'static TgpValue,
-    resolved_type: Option<DataType>
-}
-impl DataFuncImpX {
-    fn new(t: DataFuncType, profile: &'static TgpValue) -> DataFuncImp {
-        DataFuncImp { t, profile, resolved_type: None }
-    }
-    fn calc(&self) -> Val {
-        match self.t {
-            DataFuncType::Static => match self.profile {
-                TgpValue::String(s) => Val::StaticString(*s),
-                TgpValue::Int(n) => Val::Int(*n),
-                TgpValue::Float(n) => Val::Float(*n),
-                TgpValue::Boolean(b) => Val::Boolean(*b),
-                TgpValue::Array(_) => todo!(""),
-                TgpValue::Obj(_) => todo!(""),
-                _ => panic!("tgp val is not supported as static {:?}", self.profile)
-            }
-            DataFuncType::Agg => todo!(),
-            DataFuncType::Single => todo!(),
-        }
-    }
-}
 /*
 todo:
 

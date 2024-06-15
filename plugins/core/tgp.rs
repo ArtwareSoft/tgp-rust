@@ -1,7 +1,7 @@
 pub use std::collections::HashMap as StdHashMap;
 extern crate lazy_static;
 use std::{rc::Rc, sync::Arc};
-use std::any::Any;
+use std::any::{type_name, Any};
 use std::clone::Clone;
 extern crate paste;
 
@@ -136,6 +136,10 @@ pub struct Ctx {
 
 impl Ctx {
     pub fn new(profile: &'static TgpValue) -> Arc<Ctx> { Arc::new( Ctx {profile, parent_param: None, path: "unknown", comp: None, caller_ctx: None } )}
+    pub fn run_profile_by_id<T: TgpType>(pt: StaticString) -> T::ResType { 
+        let profile: &'static TgpValue = Box::leak(Box::<TgpValue>::from(TgpValue::Profile(Profile{pt, props: StdHashMap::new()})));
+        Arc::new( Ctx { profile, parent_param: None, path: "unknown", comp: None, caller_ctx: None } ).run::<T>()
+    }
     pub fn new_comp(self: &Arc<Ctx>, comp: &'static Comp) -> Arc<Ctx> { Arc::new(
         Ctx { comp: Some(comp),
         profile: comp.r#impl, parent_param: self.parent_param, 
@@ -157,7 +161,7 @@ impl Ctx {
                             TgpValue::RustImpl(ref any_arc) => {
                                 match any_arc.downcast_ref::<FuncType<T>>() {
                                     Some(f) => f(self),
-                                    None => panic!("can not cast impl func {:?}", self),
+                                    None => panic!("can not cast impl func of pt {} to {}", pt, type_name::<FuncType<T>>()),
                                 }
                             },
                             _ => self.new_comp(comp).run::<T>()
