@@ -48,33 +48,12 @@ impl Profile {
             None => panic!("can not find pt {}", pt)
         }
     }
-    // pub fn func<T: TgpType>(&'static self, prop: StaticString) -> DynmaicProfile<T> {
-    //     Arc::new(|| { match self.props.get(prop) {
-    //         Some(v) => T::from_ctx(v),
-    //         None => T::default_value()
-    //     }}) as DynmaicProfile<T>
-    // }
     pub fn prop<T: TgpType>(&'static self, prop: StaticString) -> T::ResType {
         match self.props.get(prop) {
             Some(v) => T::from_ctx(&Ctx::new(v)),
             None => panic!("missing value for prop {} in profile {:?}",prop,self)
         }
     }
-    // pub fn calc<T: TgpType>(&'static self) -> T::ResType {        
-    //     let pt = self.pt;
-    //     match COMPS.get(pt) {
-    //         Some(comp) => match comp.r#impl {
-    //             TgpValue::RustImpl(ref any_arc) => {
-    //                 match any_arc.downcast_ref::<FuncType<T>>() {
-    //                     Some(f) => f(self),
-    //                     None => panic!("can not cast impl 1 {}", pt),
-    //                 }
-    //             }
-    //             _ => panic!("can not cast impl 2 {}", pt)
-    //         },
-    //         None => panic!("can not find pt {}", pt)
-    //     }        
-    // }
 }
 
 #[derive(Debug, Clone)]
@@ -112,12 +91,6 @@ impl Default for TgpValue {
 
 pub type FuncType<T> = Arc<dyn Fn(&Arc<Ctx>) -> <T as TgpType>::ResType + Sync + Send>;
 pub type FuncTypeNoCtx<T> = Arc<dyn Fn() -> <T as TgpType>::ResType + Sync + Send>;
-
-// pub struct DynmaicProfile<T: TgpType> {
-//     ctx: Arc<Ctx>,
-//     prop: StaticString,
-//     phantom: std::marker::PhantomData<T>,
-// }
 
 pub trait TgpType: Any + Send + Sync {
     type ResType;
@@ -195,6 +168,13 @@ impl Ctx {
             _ => panic!("ctx.prop '{}' expecting profile as tgpValue {:?}", prop, self)
         }
     }
+    pub fn prop_array<T: TgpType>(self: &Arc<Ctx>, prop: StaticString) -> Vec<T::ResType> {
+        match self.profile {
+            TgpValue::Profile(prof) =>
+                self.inner_profiles(prof, prof.param_def(prop)).iter().map(|prof_ctx| T::from_ctx(&prof_ctx)).collect(),
+            _ => panic!("ctx.prop_array '{}' expecting profile as tgpValue {:?}", prop, self)
+        }
+    }
     pub fn func<T: TgpType>(self: Arc<Ctx>, prop: StaticString) -> FuncTypeNoCtx<T> {
         Arc::new(move || { self.prop::<T>(prop) })
     }
@@ -213,8 +193,24 @@ impl Ctx {
             }
         }        
     }
-    pub fn inner_profile_in_array(self: &Arc<Ctx>, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Option<Arc<Ctx>> {
+    pub fn inner_profiles(self: &Arc<Ctx>, profile: &'static Profile, parent_param: &'static Param) -> Vec<Arc<Ctx>> {
         let param_id = parent_param.id;
-        Some(self.profile_and_path(inner_profile, parent_param, &format!("{}~{param_id}~{index}", self.path)))
+        match profile.props.get(param_id) {
+            Some(TgpValue::Array(ar)) => ar.iter().enumerate()
+                .map(|(index,val)|self.profile_and_path(val, parent_param, &format!("{}~{param_id}~{index}", self.path)))
+                .collect(),
+            Some(val) => vec!(self.profile_and_path(val, parent_param, &format!("{}~{param_id}", self.path))),
+            None => match parent_param.default_value {
+                Some(TgpValue::Array(ar)) => ar.iter().enumerate()
+                    .map(|(index,val)|self.profile_and_path(val, parent_param, &format!("{}~params~{param_id}~defaultValue~{index}", profile.pt)))
+                    .collect(),
+                Some(v) => vec!(self.profile_and_path(v, parent_param, &format!("{}~params~{param_id}~defaultValue", profile.pt))),
+                None => Vec::new()
+            }
+        }        
     }
+    // pub fn inner_profile_in_array(self: &Arc<Ctx>, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Arc<Ctx> {
+    //     let param_id = parent_param.id;
+    //     self.profile_and_path(inner_profile, parent_param, &format!("{}~{param_id}~{index}", self.path))
+    // }
 }

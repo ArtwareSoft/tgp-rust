@@ -9,7 +9,7 @@ use ctor::ctor;
 pub struct TestResult {
     pub success: bool,
     pub test_id: &'static str,
-    pub failure_reason: Option<String>,
+    pub reason: String,
 }
 pub struct Test;
 impl TgpType for Test {

@@ -57,13 +57,13 @@ comp!(ptByExample, {
 comp!(expTest, {
     type: Test,
     params: [ 
-        param(exp, Exp), 
+        param(res, Exp), 
         param(expectedResult, Exp),
     ],    
-    impl: fn (exp: Exp, expectedResult: Exp) -> Test { TestResult { 
-        success: exp == expectedResult, 
+    impl: fn (res: Exp, expectedResult: Exp) -> Test { TestResult { 
+        success: res == expectedResult, 
         test_id: ctx.comp.unwrap().id, 
-        failure_reason: if exp == expectedResult { None } else{ Some(format!("{} != {}", exp, expectedResult)) }
+        reason: format!("{} == {}", res, expectedResult)
     } }
 });
 
