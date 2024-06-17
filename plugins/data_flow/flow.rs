@@ -1,4 +1,4 @@
-use crate::core::comp::{as_static, COMPS};
+use crate::core::comp::{as_static, Param, COMPS};
 use crate::core::tester::{Test, TestResult};
 use crate::core::tgp::{Ctx, FuncType, Profile, StaticString, TgpType, TgpValue };
 
@@ -9,15 +9,12 @@ use tgp_macro::{comp};
 use ctor::ctor;
 
 pub type DataObj = HashMap<StaticString, Val>;
-#[derive(PartialEq)]
-pub enum DataTypeEnum {
-    String, Int, Bool, Float, Obj, StringArray, IntArray, ObjArray, OtherArray, Empty
-}
-impl DataTypeEnum {
-    fn isString(&self) -> bool { *self == DataTypeEnum::String || *self == DataTypeEnum::StringArray }
-    fn isInt(&self) -> bool { *self == DataTypeEnum::Int || *self == DataTypeEnum::IntArray }
-}
 
+// #[derive(Clone, Debug)]
+// pub struct _Val {
+//     t: Arc<dyn Any + Sync + Send>,
+//     imp: Option<ValImp>,
+// }
 #[derive(Clone, Debug)]
 pub enum Val {
     Null,
@@ -32,12 +29,6 @@ pub enum Val {
     Obj(Arc<DataObj>),
 }
 impl Val {
-    fn data_type(&self) -> DataTypeEnum { 
-        match self {
-            Val::StaticString(_) => DataTypeEnum::String,
-            _ => DataTypeEnum::Empty
-        }
-    }
     fn Int(&self) -> usize { match self {
         Val::Int(i) => *i,
         _ => panic!("not an integer {:?}", self)

@@ -1,6 +1,6 @@
 use tgp::core::comp::{COMPS, Comp, Param, as_static, DATA_PARAM, NOP };
 use tgp::core::tester::Test;
-use tgp::core::tgp::{Ctx, ExtendCtx, Profile, SomeVarsDef, StaticString, TgpType, TgpValue };
+use tgp::core::tgp::{Ctx, Profile, StaticString, TgpType, TgpValue };
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;

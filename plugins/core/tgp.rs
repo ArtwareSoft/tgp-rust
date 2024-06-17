@@ -62,7 +62,6 @@ pub enum TgpValue {
     Int(usize),
     Float(f64),
     Boolean(bool),
-    ProfileExtendsCtx(Profile, &'static ExtendCtx),
     Profile(Profile),
     UnresolvedProfile(StaticString, Vec<TgpValue>),
     RustImpl(Arc<dyn Any + Sync + Send + 'static>),
@@ -72,21 +71,6 @@ pub enum TgpValue {
     Iden(StaticString),
     JsFunc(StaticString),
     Err(String)
-}
-
-#[derive(Debug, Clone)]
-pub struct ExtendCtx {
-    pub data: Option<&'static TgpValue>,
-    pub vars: Option<&'static SomeVarsDef>,
-}
-#[derive(Debug, Clone)]
-pub enum SomeVarsDef {
-    VarDef(StaticString, Option<&'static TgpValue>),
-    VarsDef(Vec<(StaticString, Option<&'static TgpValue>)>),
-}
-
-impl Default for TgpValue {
-    fn default() -> Self { TgpValue::Nop() }
 }
 
 pub type FuncType<T> = Arc<dyn Fn(&Arc<Ctx>) -> <T as TgpType>::ResType + Sync + Send>;
@@ -103,7 +87,6 @@ pub struct Ctx {
     pub profile: &'static TgpValue,
     pub comp: Option<&'static Comp>,
     pub parent_param: Option<&'static Param>,
-//    pub vars: Vars,
     pub caller_ctx: Option<Arc<Ctx>>,
 }
 
@@ -175,7 +158,7 @@ impl Ctx {
             _ => panic!("ctx.prop_array '{}' expecting profile as tgpValue {:?}", prop, self)
         }
     }
-    pub fn func<T: TgpType>(self: Arc<Ctx>, prop: StaticString) -> FuncTypeNoCtx<T> {
+pub fn func<T: TgpType>(self: Arc<Ctx>, prop: StaticString) -> FuncTypeNoCtx<T> {
         Arc::new(move || { self.prop::<T>(prop) })
     }
     pub fn profile_and_path(self: &Arc<Ctx>, profile: &'static TgpValue, parent_param: &'static Param, path: &str) -> Arc<Ctx> { Arc::new(
@@ -209,8 +192,4 @@ impl Ctx {
             }
         }        
     }
-    // pub fn inner_profile_in_array(self: &Arc<Ctx>, inner_profile: &'static TgpValue, parent_param: &'static Param, index: usize) -> Arc<Ctx> {
-    //     let param_id = parent_param.id;
-    //     self.profile_and_path(inner_profile, parent_param, &format!("{}~{param_id}~{index}", self.path))
-    // }
 }

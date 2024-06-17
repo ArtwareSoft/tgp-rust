@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use std::any::Any;
 use std::sync::Mutex;
 use crate::core::tgp::{TgpValue,StdHashMap,StaticString,Profile,TgpType,FuncType,Ctx};
 use std::collections::HashSet;
@@ -55,7 +56,7 @@ impl Comps {
         let id = as_static(&format!("{}{}", r#type, short_id));
         let params = comp.prop("params").map_or(vec!{}, |params| match params {
             TgpValue::Array(params) => params.iter().map(|param| {
-                let p : &Param = Box::leak(Box::<Param>::from(ParamType::from_ctx_with_dsl(param,dsl)));
+                let p : &Param = Box::leak(Box::<Param>::from(ParamType::from_tgp_value(param,dsl)));
                 p
             }).collect(),
             _ => vec!{}
@@ -174,7 +175,7 @@ impl Param {
             src             
         } 
     }
-    pub fn new_with_dsl(src: &'static TgpValue, dsl: StaticString) -> Self { 
+    pub fn from_tgp_value(src: &'static TgpValue, dsl: StaticString) -> Self { 
         Param {
             id: src.id().expect(
                 &format!("no id for param {:#?}", src)), 
@@ -194,18 +195,35 @@ impl TgpType for ParamType {
 }
 
 impl ParamType {
-    fn from_ctx_with_dsl(profile: &'static TgpValue, dsl: StaticString) -> Param {
+    fn from_tgp_value(profile: &'static TgpValue, dsl: StaticString) -> Param {
         match profile {
             TgpValue::Iden(id) => Param::simple(id, "data<>", None),
             TgpValue::String(id) => Param::simple(id, "data<>", None),
             TgpValue::UnresolvedProfile(_,_) => {
                 let param = Box::leak(Box::<TgpValue>::from(COMPS.resolve_profile(profile.clone(), &PARAM_OF_PARAM, profile)));
-                Param::new_with_dsl(param, dsl)
+                Param::from_tgp_value(param, dsl)
             },
             TgpValue::Profile(profile) => panic!("param should be solved as unresolved: {:?}", profile),
             _ => panic!("invalid param: {:?}", profile)
         }
     }
+}
+
+pub trait TgpTypeI {
+    fn is_of_type(&self, parent: dyn TgpTypeI) -> bool;
+    fn as_string(&self) -> StaticString;
+
+    fn button_up_calc(&self, prof: &TgpValue, parent_param: &Param) -> &TgpValue;
+    fn validate(&self, prof: &TgpValue, type_of_parent: dyn TgpTypeI, parent_param: &Param) -> &TgpValue;
+}
+struct TgpTypeType;
+// impl TgpTypeType {
+//     fn from_tgp_value(profile: &'static TgpValue, dsl: StaticString) -> Arc<dyn Any + Sync + Send + 'static> { 
+//     }
+// }
+impl TgpType for TgpTypeType {
+    type ResType = StaticString;
+    fn from_ctx(_ctx: &Arc<Ctx>) -> Self::ResType { panic!("should be initialized with dsl") }
 }
 
 pub struct StaticStringType;
