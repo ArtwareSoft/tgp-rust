@@ -1,11 +1,10 @@
 use lazy_static::lazy_static;
 use std::any::Any;
 use std::sync::Mutex;
-use crate::core::tgp::{TgpValue,StdHashMap,StaticString,Profile,TgpType,FuncType,Ctx};
+use crate::bootstrap_tgp::tgp1::{TgpValue,StdHashMap,StaticString,Profile,TgpType,FuncType,Ctx};
 use std::collections::HashSet;
 
 use std::sync::Arc;
-use tgp_macro::comp;
 use ctor::ctor;
 use maplit::hashmap;
 
@@ -46,13 +45,16 @@ impl Comps {
         self.unresolved.lock().unwrap().push((module, id, Box::leak(Box::<TgpValue>::from(comp))));
     }
     pub fn resolve(&self) {
+        println!("bootstrap resolve");
+        if self.comps.lock().unwrap().len() != 0 { return };
         self.bootstrap();
         let param = self.unresolved.lock().unwrap().clone().into_iter().find(|(_, short_id, _)| *short_id == "param");
         self.resolve_comp("", "param", param.unwrap().2);
         self.unresolved.lock().unwrap().clone().into_iter().for_each(|(module, short_id, comp)| self.resolve_comp(module, short_id, comp))
+        //self.unresolved.lock().unwrap().clear();
     }
     fn resolve_comp(&self, module: StaticString, short_id: StaticString, comp: &'static TgpValue) {
-        println!("resolving Comp {}",short_id);
+        println!("bootstrap resolving Comp {}",short_id);
         let dsl = DSLS.dsl_of_module(module).unwrap_or_else(||"");
         let r#type = comp.prop_as_str("type").map_or("data<>", |t| as_static(&format!("{}<{}>", t, dsl)));
         let id = as_static(&format!("{}{}", r#type, short_id));
@@ -70,7 +72,7 @@ impl Comps {
         comps.insert(id , Box::leak(Box::<Comp>::from(resolved)));
     }
     fn resolve_profile(&self, prof: TgpValue, parent_param: &Param, parent_comp: &TgpValue) -> TgpValue {
-        //println!("resolving profile {:?} {:?}", prof, parent_param);
+        println!("resolving profile {:?} {:?}", prof, parent_param);
         match prof {
             TgpValue::UnresolvedProfile(unresolved_pt,values) => {
                 let (args_by_value, args_by_name) = match values.last() {
@@ -121,8 +123,6 @@ impl Comps {
                 Param::simple("id", "type", None)
             }) as FuncType < ParamType >)),
         }));
-    }
-}
         // self.add("", "int", Profile::new("primitiveType", hashmap!{
         //     "id" => TgpValue::Iden("int"),
         //     "type" => TgpValue::Iden("tgpType"),
@@ -132,9 +132,8 @@ impl Comps {
         //     }) as FuncType < TgpTypeType >)),
         // }));
 
-//    }
-
-    // comp!(param, {
+    }
+}
 
 // comp!(param, {
 //     type: param,

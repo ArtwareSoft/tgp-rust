@@ -45,7 +45,6 @@ comp!(plus, {
     impl: fn (x: fn Exp, y: Exp) -> Exp { x() + y },
 });
 
-
 comp!(ptByExample, {
     type: Exp,
     params: [ 

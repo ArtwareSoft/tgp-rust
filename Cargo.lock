@@ -155,12 +155,15 @@ dependencies = [
 name = "tgp_macro"
 version = "0.1.0"
 dependencies = [
+ "ctor",
  "lazy_static",
  "litrs",
+ "maplit",
  "once_cell",
  "paste",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn 2.0.63",
 ]
 

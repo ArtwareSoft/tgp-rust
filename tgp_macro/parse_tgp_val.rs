@@ -1,160 +1,71 @@
 use std::convert::TryFrom;
 extern crate proc_macro;
 use litrs::Literal;
-use proc_macro2::{TokenStream, TokenTree};
+use proc_macro2::{TokenStream, TokenTree, Span};
 use proc_macro2::Delimiter::{Brace, Bracket, Parenthesis};
 use syn::spanned::Spanned;
 use syn::{Result, Error};
 use quote::{format_ident, quote};
+use std::collections::HashMap;
 
-pub fn tgp_val_from_string(body: &str) -> Result<TokenStream> {
-    let mut fixed = String::new();
-    let mut in_single_quotes = false;
-    let mut chars = body.chars();
-
-    while let Some(c) = chars.next() {
-        match c {
-            '\'' if in_single_quotes => {
-                in_single_quotes = false;
-                fixed.push('"');
-            },
-            '\'' if !in_single_quotes => {
-                in_single_quotes = true;
-                fixed.push('"');
-            },
-            '"' if in_single_quotes => { fixed.push_str("\\\"") },
-            _ => { fixed.push(c) }
-        }
-    }
-    tgp_val(fixed.parse().unwrap())
+enum TgpVal {
+    String(String),
+    Int(usize),
+    Float(f64),
+    Boolean(bool),
+    Array(Vec<TgpValWithSpan>),
+    Obj(HashMap<String, TgpValWithSpan>),
+    Iden(String),
+    RustCode(TokenStream),
+}
+struct TgpValWithSpan {
+    v: TgpVal,
+    span: Span
 }
 
-pub fn comp(body: TokenStream) -> Result<TokenStream> {
+struct MacroCtx {
+    vStack: Vec<TgpValWithSpan>
+}
+
+pub fn parse_comp(body: TokenStream, ctx: MacroCtx) -> Result<bool> {
     let span = body.span();
     let mut iter = body.into_iter();
     let ident = match iter.next() {
         Some(TokenTree::Ident(iden)) => iden,
         _ => return Err(Error::new(span, "expecting comp name"))
     };
-    let cmp = match iter.next() {
-        Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => tgp_val(iter.collect()),
+
+    match iter.next() {
+        Some(TokenTree::Punct(punct)) if punct.as_char() == ',' => parse_tgp_val(iter.collect(), ctx),
         Some(tt) => Err(Error::new(tt.span(), "expecting , 2")),
         None => Err(Error::new(ident.span(), "expecting , 3"))
     }?;
-    let fn_name = format_ident!("{}_init", ident);
-    let res = quote! { 
-        #[ctor]
-        #[allow(non_snake_case)]
-        fn #fn_name() {
-            COMPS.add(module_path!(), stringify!(#ident), #cmp) 
-        }
-    };
-    println!("comp {}",res.to_string());
-    Ok(res)
+    Ok(true)
 }
 
-pub fn dsl(dsl: TokenStream) -> Result<TokenStream> {
-    let span = dsl.span();
-    match dsl.into_iter().next() {
-        Some(TokenTree::Ident(iden)) => Ok(quote! {{DSLs.add(module_path!(), stringify!(#iden)) }}),
-        _ => Err(Error::new(span, "expecting dsl"))
-    }
-}
+// pub fn tgp_val_to_json_from_string(body: &str, macroCtx: MacroCtx) -> Result<TokenStream> {
+//     let mut fixed = String::new();
+//     let mut in_single_quotes = false;
+//     let mut chars = body.chars();
 
-fn tgp_function(func: TokenStream) -> Result<TokenStream> {
-    let span = func.span();
-    let mut iter = func.into_iter();
-    match iter.next() {
-        Some(TokenTree::Punct(p)) if p.to_string() == "<" => match iter.next() {
-            Some(TokenTree::Ident(res_type)) => { // fn<Exp> |ctx: &Arc<Ctx>| { ...
-                match iter.next() {
-                    Some(TokenTree::Punct(p)) if p.as_char() == '>' => {},
-                    _ => return Err(Error::new(res_type.span(), "expecting >"))
-                }
-            
-                let body: TokenStream = iter.collect();
-                return Ok(quote! {{
-                    TgpValue::RustImpl(Arc::new(Arc::new(#body) as FuncType<#res_type>))
-                }})        
-            },
-            _ => return Err(Error::new(p.span(), "expecting <TYPE>"))
-        }
-        Some(TokenTree::Group(g)) if g.delimiter() == Parenthesis => { // fn (x: Fn Exp, y: Exp) -> Exp { x() + y },
-        // => |ctx: &Arc<Ctx>| {
-        //    match (ctx.prop::<Exp>("x"), ctx.prop::<Exp>("y")) {
-        //        (x, y) => { x + y }
-        //    }
-        // }
-            let params_in_match_exp = join_token_streams_with_comma(split_token_stream(g.stream(), ',')
-                .map(|x| param_to_match_exp(x).unwrap()).collect());
-            let param_names = join_token_streams_with_comma(split_token_stream(g.stream(), ',')
-                .map(|x| param_name(x).unwrap()).collect());
+//     while let Some(c) = chars.next() {
+//         match c {
+//             '\'' if in_single_quotes => {
+//                 in_single_quotes = false;
+//                 fixed.push('"');
+//             },
+//             '\'' if !in_single_quotes => {
+//                 in_single_quotes = true;
+//                 fixed.push('"');
+//             },
+//             '"' if in_single_quotes => { fixed.push_str("\\\"") },
+//             _ => { fixed.push(c) }
+//         }
+//     }
+//     parse_tgp_val(fixed.parse().unwrap())
+// }
 
-            let arrow = match iter.next() {
-                Some(TokenTree::Punct(p)) if p.as_char() == '-' => match iter.next() {
-                    Some(TokenTree::Punct(p)) if p.as_char() == '>' => {p},
-                    _ => return Err(Error::new(p.span(), "expecting >"))
-                },
-                _ => return Err(Error::new(g.span(), "expecting -> at the end"))
-            };
-            let res_type = match iter.next() {
-                Some(TokenTree::Ident(res_type)) => res_type,
-                _ => return Err(Error::new(arrow.span(), "expecting result type"))
-            };
-            let body: TokenStream = iter.collect();
-            return Ok(quote! {{
-                TgpValue::RustImpl(Arc::new(Arc::new(
-                    |ctx: &Arc<Ctx>| {
-                        match (#params_in_match_exp) {
-                            (#param_names) => #body
-                        }
-                    }) as FuncType<#res_type>))
-            }})
-        },
-        _ => return Err(Error::new(span, "expecting function def:  fn(x: Exp, y: fn Exp) | fn<T> |ctx: &Arc<Ctx>|"))
-    }
-
-    fn join_token_streams_with_comma(streams: Vec<TokenStream>) -> TokenStream {
-        let mut iter = streams.into_iter();
-        if let Some(first) = iter.next() {
-            iter.fold(first, |acc, ts| quote! { #acc , #ts })
-        } else {
-            TokenStream::new()
-        }
-    }
-    
-    fn param_name(param: TokenStream) -> Result<TokenStream> {
-        let span = param.span();
-        let mut iter = param.into_iter();
-        match iter.next() {
-            Some(TokenTree::Ident(param)) => Ok(quote!{#param}),
-            _ => return Err(Error::new(span, "expecting param identifier"))
-        }
-    }    
-
-    fn param_to_match_exp(param: TokenStream) -> Result<TokenStream> {
-        let span = param.span();
-        let mut iter = param.into_iter();
-        let iden = match iter.next() {
-            Some(TokenTree::Ident(param)) => param,
-            _ => return Err(Error::new(span, "expecting param identifier"))
-        };
-        let colon = match iter.next() {
-            Some(TokenTree::Punct(p)) if p.as_char() == ':' => { p },
-            _ => return Err(Error::new(iden.span(), "expecting :"))
-        };
-        match iter.next() {
-            Some(TokenTree::Ident(t)) if t.to_string() == "fn" => match iter.next() {
-                Some(TokenTree::Ident(t)) => { Ok(quote! {ctx.clone().func::<#t>(stringify!(#iden)) }) },
-                _ => return Err(Error::new(t.span(), "expecting param type identifier"))
-            },
-            Some(TokenTree::Ident(t)) => { Ok(quote! {ctx.prop::<#t>(stringify!(#iden)) }) },
-            _ => return Err(Error::new(colon.span(), "expecting param type identifier"))
-        }
-    }
-}
-
-pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
+pub fn parse_tgp_val(body: TokenStream, ctx: MacroCtx) -> Result<bool> {
     let span = body.span();
     let mut iter = body.into_iter();
     let tt = match iter.next() {
@@ -162,7 +73,7 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
         None => return Err(Error::new(span, "expecting tgp value 1"))
     };
     match tt {
-        TokenTree::Literal(_) => literal_value(&tt),
+        TokenTree::Literal(_) => parse_literal_value(&tt,ctx),
         TokenTree::Ident(func) if func.to_string() == "fn" => tgp_function(iter.collect()),
         TokenTree::Ident(raw) if raw.to_string() == "TgpValue" => {
             let body: TokenStream = iter.collect();
@@ -189,7 +100,7 @@ pub fn tgp_val(body: TokenStream) -> Result<TokenStream> {
     }
 }
 
-fn literal_value(input: &TokenTree) -> Result<TokenStream> {
+fn parse_literal_value(input: &TokenTree, ctx: MacroCtx) -> Result<bool> {
     match Literal::try_from(input) {
         Err(_) => {
             println!("error1");
@@ -201,7 +112,7 @@ fn literal_value(input: &TokenTree) -> Result<TokenStream> {
     }
 }
 
-fn build_profile(pt: &str, body: TokenStream) -> Result<TokenStream> {
+fn profile_to_json(pt: &str, body: TokenStream) -> Result<TokenStream> {
     let span = body.span();
     let hashmap_entries = split_token_stream(body, ',').try_fold(vec![], |mut acc, att_val| {
         let mut iter = att_val.into_iter();
@@ -217,7 +128,7 @@ fn build_profile(pt: &str, body: TokenStream) -> Result<TokenStream> {
             Some(tt) => return Err(Error::new(tt.span(), "expecting colon")),
             None => return Err(Error::new(iden.span(), "expecting colon after iden"))
         };        
-        let tgp_value = match tgp_val(iter.collect()) {
+        let tgp_value = match tgp_val_to_json(iter.collect()) {
             Ok(tt) => tt,
             Err(e) => return Err(e)
         };
@@ -235,7 +146,7 @@ fn build_profile(pt: &str, body: TokenStream) -> Result<TokenStream> {
     Ok(res)
 }
 
-fn tgp_array(body: TokenStream) -> Result<TokenStream> {
+fn tgp_array_to_json(body: TokenStream) -> Result<TokenStream> {
     let vec_items = split_token_stream(body, ',').try_fold(vec![], |mut acc, val| {
         let tgp_value = match tgp_val(val) {
             Ok(tt) => tt,
@@ -311,7 +222,7 @@ fn build_function(header: TokenStream, rest: TokenStream) -> Result<TokenStream>
 
 use std::iter::from_fn;
 
-// use crate::bootstrap_tgp::comp1::COMPS;
+use crate::bootstrap_tgp::comp1::COMPS;
 fn split_token_stream(input: TokenStream, delimiter: char) -> impl Iterator<Item = TokenStream> {
     let mut iter = input.into_iter().peekable();
     from_fn(move || {

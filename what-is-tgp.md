@@ -72,9 +72,7 @@ comp(font, {
     params: [
         param(family, "font-family"),
         param(size, size),
-        param(style, property<css>[]),
-        param(id, string),
-        param(class, string),
+        param(color, color),
         ...
     ]
 })

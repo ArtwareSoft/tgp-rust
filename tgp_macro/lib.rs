@@ -2,6 +2,8 @@
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
 mod tgp_parse;
+mod parse_tgp_val;
+//mod bootstrap_tgp;
 
 #[proc_macro]
 pub fn comp(input: TokenStream) -> TokenStream {
@@ -9,6 +11,13 @@ pub fn comp(input: TokenStream) -> TokenStream {
     let res = tgp_parse::comp(input);
     res.unwrap_or_else(|e| e.to_compile_error()).into()
 }
+
+// #[proc_macro]
+// pub fn comp_json(input: TokenStream) -> TokenStream {
+//     let input = parse_macro_input!(input);
+//     let res = tgp_parse::comp_json(input);
+//     res.unwrap_or_else(|e| e.to_compile_error()).into()
+// }
 
 #[proc_macro]
 pub fn dsl(input: TokenStream) -> TokenStream {
